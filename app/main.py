@@ -1,8 +1,31 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+
+from app import auth, mealie
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.include_router(auth.router)
+
+
+@app.exception_handler(mealie.MealieAuthError)
+def mealie_auth_error(request: Request, exc):
+    return auth.drop_session(request)
+
+
+@app.exception_handler(mealie.MealieError)
+def mealie_error(request: Request, exc):
+    return auth.templates.TemplateResponse(request, "error.html", {}, status_code=502)
 
 
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+# ponytail: placeholder Today page, Task 4 replaces it.
+@app.get("/")
+def today(request: Request, user=Depends(auth.current_user)):
+    recipes = mealie.planned_today(user["mealie_token"])
+    return auth.templates.TemplateResponse(request, "today.html", {"recipes": recipes})

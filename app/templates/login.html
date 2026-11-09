@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>homeplate</h1>
+<form method="post" action="/login" class="card">
+  {% if error %}<p class="error">Wrong username or password</p>{% endif %}
+  <label>Mealie username <input name="username" autocomplete="username" required></label>
+  <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+  <button>Sign in</button>
+</form>
+{% endblock %}

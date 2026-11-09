@@ -33,6 +33,8 @@ def test_connect_creates_schema_twice(tmp_path, monkeypatch):
     for _ in range(2):
         con = db.connect()
         names = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        cols = {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
         con.close()
+    assert "refreshed_at" in cols
     assert {"users", "sessions", "entries", "photos", "weights"} <= names
     assert "shares" not in names

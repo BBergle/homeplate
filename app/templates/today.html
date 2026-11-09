@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Today</h1>
+{% for r in recipes %}<p class="card">{{ r.name }}</p>{% else %}<p>Nothing planned.</p>{% endfor %}
+{% endblock %}

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
     mealie_token TEXT NOT NULL,
+    refreshed_at TEXT NOT NULL,
     expires_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS entries (
