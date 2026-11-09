@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -51,8 +53,26 @@ class BodyLimit:
             pass
 
 
+class SameOrigin:
+    """Block cross-site form posts: a present Origin must match Host (scheme ignored behind the proxy)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            headers = dict(scope["headers"])
+            origin = headers.get(b"origin")
+            if origin is not None and scope["method"] not in ("GET", "HEAD", "OPTIONS"):
+                host = headers.get(b"host", b"").decode("latin-1").lower()
+                if urlsplit(origin.decode("latin-1")).netloc.lower() != host:  # "null" has no netloc
+                    return await Response("Cross-site request blocked", 403, media_type="text/plain")(scope, receive, send)
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(BodyLimit)
+app.add_middleware(SameOrigin)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router)
 app.include_router(today.router)

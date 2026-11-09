@@ -244,3 +244,20 @@ def test_ids_are_not_reused(client):
     client.post(f"/entries/{first}/delete")
     client.post("/entries", data={"kind": "other", "description": "b"})
     assert rows("SELECT id FROM entries")[0][0] > first
+
+
+def test_heic_upload_becomes_jpeg(client, data_dir):
+    import pillow_heif
+
+    pillow_heif.register_heif_opener()
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 48)).save(buf, format="HEIF")
+    client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("a.heic", buf.getvalue())})
+    p = rows("SELECT path FROM photos")[0]
+    assert Image.open(data_dir / "photos" / p["path"]).format == "JPEG"
+
+
+def test_fake_heic_rejected(client, data_dir):
+    r = client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("x.heic", b"not an image")})
+    assert "That file isn" in r.text and not rows("SELECT * FROM photos")
+    assert not (data_dir / "photos").exists() or not list((data_dir / "photos").glob("*"))

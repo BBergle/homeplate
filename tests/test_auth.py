@@ -189,3 +189,25 @@ def test_every_route_requires_a_session(mock_mealie):
         assert r.status_code == 303 and r.headers["location"] == "/login", (method, path, r.status_code)
         paths += 1
     assert paths >= 8
+
+
+def _weights():
+    con = db.connect()
+    try:
+        return con.execute("SELECT * FROM weights").fetchall()
+    finally:
+        con.close()
+
+
+def test_cross_origin_post_blocked(client):
+    r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403 and not _weights()
+
+
+def test_same_origin_post_allowed(client):
+    r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": "http://TESTSERVER"})
+    assert r.status_code == 200 and _weights()
+
+
+def test_post_without_origin_allowed(client):
+    assert client.post("/weight", data={"lbs": "180"}).status_code == 200

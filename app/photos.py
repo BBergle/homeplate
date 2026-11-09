@@ -2,7 +2,10 @@ import io
 import os
 import uuid
 
+import pillow_heif
 from PIL import Image, ImageOps
+
+pillow_heif.register_heif_opener()
 
 MAX_BYTES = 15 * 1024 * 1024
 
@@ -15,7 +18,7 @@ def save(upload_bytes: bytes) -> str:
     if len(upload_bytes) > MAX_BYTES:
         raise ValueError("too large")
     try:
-        img = ImageOps.exif_transpose(Image.open(io.BytesIO(upload_bytes), formats=["JPEG", "PNG", "WEBP"])).convert("RGB")
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(upload_bytes), formats=["JPEG", "PNG", "WEBP", "HEIF", "MPO"])).convert("RGB")
     except Exception as e:
         raise ValueError("not an image") from e
     img.thumbnail((1600, 1600))
