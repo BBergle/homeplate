@@ -247,9 +247,8 @@ def test_ids_are_not_reused(client):
 
 
 def test_heic_upload_becomes_jpeg(client, data_dir):
-    import pillow_heif
+    import pillow_heif  # imported only to build the HEIC; the app must register the opener itself
 
-    pillow_heif.register_heif_opener()
     buf = io.BytesIO()
     Image.new("RGB", (64, 48)).save(buf, format="HEIF")
     client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("a.heic", buf.getvalue())})

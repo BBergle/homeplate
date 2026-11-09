@@ -1,3 +1,4 @@
+import os
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
@@ -64,8 +65,10 @@ class SameOrigin:
             headers = dict(scope["headers"])
             origin = headers.get(b"origin")
             if origin is not None and scope["method"] not in ("GET", "HEAD", "OPTIONS"):
-                host = headers.get(b"host", b"").decode("latin-1").lower()
-                if urlsplit(origin.decode("latin-1")).netloc.lower() != host:  # "null" has no netloc
+                allowed = {headers.get(b"host", b"").decode("latin-1").lower()}
+                allowed.add(urlsplit(os.environ.get("BASE_URL", "")).netloc.lower())
+                netloc = urlsplit(origin.decode("latin-1")).netloc.lower()  # "null" has no netloc
+                if not netloc or netloc not in allowed:
                     return await Response("Cross-site request blocked", 403, media_type="text/plain")(scope, receive, send)
         await self.app(scope, receive, send)
 

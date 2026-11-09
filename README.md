@@ -15,7 +15,7 @@ homeplate is on http://localhost:8000 (`/healthz`), Mealie on http://localhost:9
 | `MEALIE_URL` | Where homeplate reaches Mealie (default `http://mealie:9000`). |
 | `MEALIE_PUBLIC_URL` | Mealie address your browser can open, used for links. |
 | `SECRET_KEY` | Unused until the AI step. |
-| `BASE_URL` | homeplate's public URL; `https` turns on the cookie `Secure` flag. |
+| `BASE_URL` | homeplate's public URL; `https` turns on the cookie `Secure` flag. Form posts are accepted only from this address or the address the request arrived on. |
 | `TZ` | Time zone that decides what "today" is (default `UTC`). |
 | `DATA_DIR` | Where the database and photos live (default `/data`). |
 
