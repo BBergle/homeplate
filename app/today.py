@@ -51,8 +51,8 @@ def _num(s: str, name: str) -> int | None:
         n = float(s)
     except ValueError:
         n = -1
-    if not math.isfinite(n) or n < 0:
-        raise ValueError(f"{name} must be a number, 0 or more")
+    if not math.isfinite(n) or n < 0 or n > 100000:
+        raise ValueError(f"{name} must be a number from 0 to 100000")
     return round(n)
 
 

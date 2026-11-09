@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import auth, mealie, today
@@ -9,6 +10,7 @@ app.include_router(auth.router)
 app.include_router(today.router)
 
 
+@app.exception_handler(auth.LoginRequired)
 @app.exception_handler(mealie.MealieAuthError)
 def mealie_auth_error(request: Request, exc):
     return auth.drop_session(request)
@@ -16,6 +18,8 @@ def mealie_auth_error(request: Request, exc):
 
 @app.exception_handler(mealie.MealieError)
 def mealie_error(request: Request, exc):
+    if request.headers.get("HX-Request"):
+        return HTMLResponse('<p class="error" role="alert">Can\'t reach Mealie</p>')
     return auth.templates.TemplateResponse(request, "error.html", {}, status_code=502)
 
 

@@ -60,3 +60,26 @@ def test_leading_number():
     assert mealie.leading_number("") is None
     assert mealie.leading_number("about 300 kcal") == 300
     assert mealie.leading_number("312.5") == 312
+
+
+HX = {"HX-Request": "true"}
+
+
+def test_htmx_mealie_down(client, mock_mealie):
+    mock_mealie[("GET", "/api/households/mealplans/today")] = httpx.ConnectError("down")
+    r = client.get("/recipes/search", headers=HX)
+    assert r.status_code == 200 and "Can't reach Mealie" in r.text and "<html" not in r.text
+
+
+def test_htmx_token_expired(client, mock_mealie):
+    mock_mealie[("GET", "/api/households/mealplans/today")] = httpx.Response(401)
+    r = client.get("/recipes/search", headers=HX, follow_redirects=False)
+    assert r.status_code == 200 and r.headers["HX-Redirect"] == "/login"
+    con = db.connect()
+    assert con.execute("SELECT count(*) FROM sessions").fetchone()[0] == 0
+    con.close()
+
+
+def test_htmx_no_session(mock_mealie):
+    r = TestClient(app).get("/recipes/search", headers=HX, follow_redirects=False)
+    assert r.status_code == 200 and r.headers["HX-Redirect"] == "/login"

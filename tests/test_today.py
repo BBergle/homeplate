@@ -160,3 +160,9 @@ def test_today_uses_tz(client, monkeypatch):
     monkeypatch.setattr(today, "_now", lambda: datetime(2026, 11, 10, 1, 30, tzinfo=timezone.utc))
     client.post("/entries", data={"kind": "other", "description": "x"})
     assert rows("SELECT day FROM entries")[0][0] == "2026-11-09"
+
+
+def test_huge_calories_rejected(client):
+    r = client.post("/entries", data={"kind": "other", "description": "x", "calories": "1e300"})
+    assert r.status_code == 200 and "Calories must be a number" in r.text
+    assert not rows("SELECT * FROM entries")

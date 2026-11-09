@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app import db, mealie
@@ -13,6 +13,10 @@ templates.env.globals["mealie_url"] = os.environ.get("MEALIE_PUBLIC_URL", "")
 router = APIRouter()
 
 SESSION_DAYS = 14
+
+
+class LoginRequired(Exception):
+    """No valid session."""
 
 
 def _now() -> datetime:
@@ -29,7 +33,7 @@ def current_user(request: Request):
         ).fetchone()
         now = _now()
         if not row or datetime.fromisoformat(row["expires_at"]) <= now:
-            raise HTTPException(303, headers={"Location": "/login"})
+            raise LoginRequired()
         if now - datetime.fromisoformat(row["refreshed_at"]) > timedelta(hours=24):
             token = mealie.refresh(row["mealie_token"])
             con.execute(
@@ -48,7 +52,10 @@ def drop_session(request: Request) -> RedirectResponse:
     con.execute("DELETE FROM sessions WHERE id = ?", (request.cookies.get("sid", ""),))
     con.commit()
     con.close()
-    resp = RedirectResponse("/login", 303)
+    if request.headers.get("HX-Request"):
+        resp = Response(headers={"HX-Redirect": "/login"})  # htmx would swap a followed redirect into the page
+    else:
+        resp = RedirectResponse("/login", 303)
     resp.delete_cookie("sid")
     return resp
 
