@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Me</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<div class="card">
+  <h2>This week</h2>
+  <p class="big">{{ this_week }} of {{ user["weekly_goal"] }}</p>
+  <p>Streak: {{ streak }} week{{ "" if streak == 1 else "s" }}</p>
+  <p>Saved vs delivery: ${{ saved }}</p>
+</div>
+
+<div class="card">
+  <h2>Achievements</h2>
+  <ul class="plain">{% for name, earned in achievements %}
+    <li class="{{ 'earned' if earned else 'locked' }}">{{ "&#10003;"|safe if earned else "&#128274;"|safe }} {{ name }} ({{ "earned" if earned else "locked" }})</li>
+  {% endfor %}</ul>
+</div>
+
+<div class="card">
+  <h2>Weight</h2>
+  {% if latest is none %}<p class="muted">No weight logged yet.</p>
+  {% else %}<p>Latest: {{ latest }} lbs{% if user["weight_goal"] %} &middot; Goal: {{ user["weight_goal"] }} lbs{% endif %}</p>{% endif %}
+  {% if line %}<svg viewBox="0 0 320 80" class="spark" role="img" aria-label="Weight, last 90 days"><polyline points="{{ line }}" fill="none" stroke="currentColor" stroke-width="2"/></svg>{% endif %}
+</div>
+
+<form class="card" method="post" action="/settings">
+  <h2>Settings</h2>
+  <label>Weekly cooking goal <input type="number" name="weekly_goal" min="1" max="21" step="1" inputmode="numeric" required value="{{ user['weekly_goal'] }}"></label>
+  <label>Calorie target <input type="number" name="cal_target" min="500" max="10000" step="1" inputmode="numeric" value="{{ user['cal_target'] if user['cal_target'] is not none }}"></label>
+  <label>Protein target (g) <input type="number" name="protein_target" min="0" max="500" step="1" inputmode="numeric" value="{{ user['protein_target'] if user['protein_target'] is not none }}"></label>
+  <label>Goal weight (lbs) <input type="number" name="weight_goal" min="50" max="1000" step="any" inputmode="decimal" value="{{ user['weight_goal'] if user['weight_goal'] is not none }}"></label>
+  <label>Delivery meal cost ($) <input type="number" name="delivery_cost" min="0" max="500" step="any" inputmode="decimal" required value="{{ user['delivery_cost'] }}"></label>
+  <label>Home meal cost ($) <input type="number" name="home_meal_cost" min="0" max="500" step="any" inputmode="decimal" required value="{{ user['home_meal_cost'] }}"></label>
+  <button type="submit">Save settings</button>
+</form>
+<form method="post" action="/logout"><button class="danger" type="submit">Sign out</button></form>
+{% endblock %}

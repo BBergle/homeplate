@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}homeplate{% endblock %}</title>
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#2f7d4f">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="/static/app.css">
+{# htmx 2.0.4, vendored from cdnjs #}
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<main>{% block content %}{% endblock %}</main>
+{% if request.cookies.get("sid") %}
+<nav class="tabs">
+  <a href="/">Today</a>
+  <a href="/me">Me</a>
+  <a href="/order">Order</a>
+  <a href="/ask">Ask</a>
+</nav>
+<footer class="links">
+  <a href="{{ mealie_url }}">Recipes</a>
+  <a href="{{ mealie_url }}">Plan</a>
+  <a href="{{ mealie_url }}">List</a>
+</footer>
+{% endif %}
+</body>
+</html>

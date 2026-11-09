@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Today</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<p class="card totals">
+  {{ cal }}{% if user["cal_target"] %} / {{ user["cal_target"] }}{% endif %} kcal &middot;
+  {{ protein }}{% if user["protein_target"] %} / {{ user["protein_target"] }}{% endif %} g protein
+</p>
+
+<ul class="entries">{% for e in entries %}{% include "_entry.html" %}{% else %}<li class="muted">Nothing logged yet.</li>{% endfor %}</ul>
+
+<section class="card">
+<h2>I cooked</h2>
+<input type="search" name="q" placeholder="Search recipes" autocomplete="off"
+       hx-get="/recipes/search" hx-trigger="load, input changed delay:300ms" hx-target="#recipes">
+<form method="post" action="/entries" enctype="multipart/form-data">
+  <input type="hidden" name="kind" value="cooked">
+  <div id="recipes"></div>
+  <label>Photo <input type="file" name="photo" accept="image/*"></label>
+  <label class="check"><input type="checkbox" name="show_photo" value="on" checked> Show on recipe page</label>
+  <label class="check"><input type="checkbox" name="leftovers" value="on"> Leftovers</label>
+  <label>Note (needed if no recipe) <input type="text" name="description"></label>
+  <label>Calories <input type="number" name="calories" min="0" step="any" inputmode="numeric"></label>
+  <label>Protein (g) <input type="number" name="protein_g" min="0" step="any" inputmode="numeric"></label>
+  <button type="submit">Log meal</button>
+</form>
+</section>
+
+<form class="card" method="post" action="/entries">
+  <h2>Add food</h2>
+  <input type="hidden" name="kind" value="other">
+  <label>Description <input type="text" name="description" required></label>
+  <label>Calories <input type="number" name="calories" min="0" step="any" inputmode="numeric"></label>
+  <label>Protein (g) <input type="number" name="protein_g" min="0" step="any" inputmode="numeric"></label>
+  <button type="submit">Add</button>
+</form>
+
+<form class="card" method="post" action="/weight">
+  <h2>Weight</h2>
+  <label>Pounds <input type="number" name="lbs" min="50" max="1000" step="0.1" inputmode="decimal" required
+         {% if weight is not none %}value="{{ weight }}"{% endif %}></label>
+  <button type="submit">Save weight</button>
+</form>
+{% endblock %}

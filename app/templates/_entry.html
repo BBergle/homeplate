@@ -1,0 +1,9 @@
+<li class="card entry">
+  {% if e.photo_id %}<img class="thumb" src="/photos/{{ e.photo_id }}" alt="">{% endif %}
+  <div class="grow">
+    <strong>{{ e.kind }}</strong>: {{ e.recipe_name or e.description }}
+    {% if e.recipe_name and e.description %}<br>{{ e.description }}{% endif %}
+    <br><span class="muted">{{ e.calories if e.calories is not none else "-" }} kcal, {{ e.protein_g|round|int if e.protein_g is not none else "-" }} g protein</span>
+  </div>
+  <form method="post" action="/entries/{{ e.id }}/delete"><button type="submit" class="danger">Delete</button></form>
+</li>
