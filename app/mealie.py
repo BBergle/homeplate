@@ -16,6 +16,10 @@ class MealieNotFound(MealieError):
     """Mealie answered 404."""
 
 
+class MealieRejected(MealieError):
+    """Mealie answered 400, 403, 409 or 422: it refused the request."""
+
+
 class MealieAuthError(Exception):
     """Mealie rejected the credentials or token (401), or locked the account (423)."""
 
@@ -36,6 +40,8 @@ def _send(method: str, path: str, token: str | None = None, **kw) -> httpx.Respo
         raise MealieAuthError()
     if r.status_code == 404:
         raise MealieNotFound()
+    if r.status_code in (400, 403, 409, 422):
+        raise MealieRejected(f"Mealie answered {r.status_code}")
     if r.status_code >= 500:
         raise MealieError(f"Mealie answered {r.status_code}")
     try:
@@ -63,6 +69,23 @@ def refresh(token: str) -> str:
 
 def me(token: str) -> dict:
     return _request("GET", "/api/users/self", token)
+
+
+def create_household(token: str, name: str) -> str:
+    return _request("POST", "/api/admin/households", token, json={"name": name})["id"]
+
+
+def create_invite(token: str, household_id: str | None) -> str:
+    body = {"uses": 1} | ({"householdId": household_id} if household_id else {})
+    return _request("POST", "/api/households/invitations", token, json=body)["token"]
+
+
+def register(invite: str, full_name: str, email: str, username: str, password: str) -> None:
+    body = {
+        "groupToken": invite, "email": email, "username": username, "fullName": full_name,
+        "password": password, "passwordConfirm": password,
+    }
+    _send("POST", "/api/users/register", json=body)
 
 
 def search_recipes(token: str, q: str) -> list[dict]:

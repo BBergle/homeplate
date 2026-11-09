@@ -40,5 +40,6 @@
   <label>Home meal cost ($) <input type="number" name="home_meal_cost" min="0" max="500" step="any" inputmode="decimal" required value="{{ user['home_meal_cost'] }}"></label>
   <button type="submit">Save settings</button>
 </form>
+<p><a href="/invite">Invite someone</a></p>
 <form method="post" action="/logout"><button class="danger" type="submit">Sign out</button></form>
 {% endblock %}

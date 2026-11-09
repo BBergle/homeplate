@@ -122,3 +122,9 @@ def test_share_mealie_down_signed_in_shows_no_nav(login_as, mock_mealie):
     r = u1.get(f"/s/{TOKEN}")
     assert r.status_code == 502 and "Can't reach Mealie" in r.text
     assert 'href="/me"' not in r.text and 'class="tabs"' not in r.text and "htmx" not in r.text
+
+
+def test_expired_share_token_rejected_by_mealie_is_public_404(login_as, mock_mealie):
+    shared(login_as, mock_mealie)
+    mock_mealie[("GET", f"/api/recipes/shared/{TOKEN}")] = httpx.Response(400, json={})
+    assert TestClient(app).get(f"/s/{TOKEN}").status_code == 404

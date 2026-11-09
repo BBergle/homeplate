@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Invite someone</h1>
+{% if not may %}
+<p>Ask the person who runs this server to invite people.</p>
+{% elif link %}
+<div class="card">
+  <p>Send this link. It works once.</p>
+  <p><a href="{{ link }}">{{ link }}</a></p>
+</div>
+{% else %}
+<form method="post" action="/invite" class="card">
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <label><input type="radio" name="where" value="mine" checked> My household</label>
+  {% if admin %}
+  <label><input type="radio" name="where" value="new"> Their own household</label>
+  <label>Household name <input name="household_name" maxlength="50"></label>
+  {% endif %}
+  <button>Create invite link</button>
+</form>
+{% endif %}
+{% endblock %}

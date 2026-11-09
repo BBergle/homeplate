@@ -71,7 +71,7 @@ def page(request: Request, token: str):
         return _gone(request)
     try:
         r = mealie.shared_recipe(token)
-    except (mealie.MealieNotFound, mealie.MealieAuthError):  # never send a public visitor to /login
+    except (mealie.MealieNotFound, mealie.MealieRejected, mealie.MealieAuthError):  # never send a public visitor to /login
         return _gone(request)
     con = db.connect()
     try:
