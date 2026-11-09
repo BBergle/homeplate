@@ -13,7 +13,7 @@ FORM = {"name": "Fran", "email": "f@x.io", "username": "fran", "password": "hunt
 
 def as_user(login_as, mock_mealie, **flags):
     c = login_as("u1")
-    mock_mealie[("GET", "/api/users/self")] = httpx.Response(200, json={"id": "u1", "fullName": "U", "admin": False, **flags})
+    mock_mealie[("GET", "/api/users/self")] = httpx.Response(200, json={"id": "u1", "fullName": "U", "admin": False, "groupId": "g-1", **flags})
     return c
 
 
@@ -52,7 +52,7 @@ def test_admin_invites_to_new_household(login_as, mock_mealie, monkeypatch):
     seen = bodies(mock_mealie, monkeypatch)
     r = c.post("/invite", data={"where": "new", "household_name": "  Smiths "})
     assert r.status_code == 200 and "/join/abc123" in r.text
-    assert seen[HH] == [{"name": "Smiths"}]
+    assert seen[HH] == [{"name": "Smiths", "groupId": "g-1"}]
     assert seen[INV] == [{"uses": 1, "householdId": "hh-1"}]
 
 

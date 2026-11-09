@@ -72,7 +72,8 @@ def me(token: str) -> dict:
 
 
 def create_household(token: str, name: str) -> str:
-    return _request("POST", "/api/admin/households", token, json={"name": name})["id"]
+    # real Mealie 500s without groupId, so create it in the admin's own group
+    return _request("POST", "/api/admin/households", token, json={"name": name, "groupId": me(token)["groupId"]})["id"]
 
 
 def create_invite(token: str, household_id: str | None) -> str:
