@@ -58,3 +58,9 @@ ul.entries { list-style: none; margin: 0; padding: 0; }
 .choice input, .check input { width: 24px; height: 24px; min-height: 0; margin: 0; flex: none; }
 #recipes { max-height: 220px; overflow-y: auto; margin-bottom: 12px; }
 button.danger { background: transparent; color: var(--err); border: 1px solid var(--line); }
+.big { font-size: 2rem; font-weight: 700; margin: 0 0 4px; }
+ul.plain { list-style: none; margin: 0; padding: 0; }
+ul.plain li { min-height: 44px; display: flex; align-items: center; gap: 8px; }
+li.locked { color: var(--muted); }
+li.earned { font-weight: 600; }
+.spark { width: 100%; height: auto; color: var(--accent); }

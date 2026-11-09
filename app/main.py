@@ -2,12 +2,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import auth, mealie, today
+from app import auth, me, mealie, today
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router)
 app.include_router(today.router)
+app.include_router(me.router)
 
 
 @app.exception_handler(auth.LoginRequired)
