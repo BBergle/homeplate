@@ -19,6 +19,10 @@ homeplate is on http://localhost:8000 (`/healthz`), Mealie on http://localhost:9
 | `TZ` | Time zone that decides what "today" is (default `UTC`). |
 | `DATA_DIR` | Where the database and photos live (default `/data`). |
 
+## Sharing
+
+Any signed-in user can create a public link for a recipe from its gallery page (`/r/<id>`). Anyone with the link, no account needed, sees the recipe and everyone's non-private photos of it, nothing about who cooked it. "Stop sharing" kills the link. No extra Mealie setup is needed.
+
 ## Tests
 
     python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt

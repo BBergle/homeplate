@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>{{ recipe["name"] }}</h1>
-{% block share %}{% endblock %}
+<form method="post" action="/r/{{ recipe['id'] }}/{{ 'unshare' if share_url else 'share' }}">
+  {% if share_url %}<p>Public link: <a href="{{ share_url }}">{{ share_url }}</a></p>{% endif %}
+  <button type="submit">{{ "Stop sharing" if share_url else "Create share link" }}</button>
+</form>
 {% if mealie_url and group %}<p><a href="{{ mealie_url }}/g/{{ group }}/r/{{ recipe['slug'] }}">Open in Mealie</a></p>{% endif %}
 {% if photos %}
 <ul class="gallery">{% for p in photos %}

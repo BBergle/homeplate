@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app import auth, db, mealie
@@ -20,7 +22,9 @@ def gallery(request: Request, recipe_id: str, user=Depends(auth.current_user)):
             "ORDER BY created_at DESC, id DESC",
             (r["id"], uid),
         ).fetchall()
+        shared = con.execute("SELECT token FROM shares WHERE recipe_id = ?", (r["id"],)).fetchone()
     finally:
         con.close()
-    ctx = {"recipe": r, "photos": photos, "uid": uid, "group": mealie.me(token).get("groupSlug")}
+    base = os.environ.get("BASE_URL", "").rstrip("/") or str(request.base_url).rstrip("/")
+    ctx = {"recipe": r, "photos": photos, "uid": uid, "share_url": shared and f"{base}/s/{shared['token']}", "group": mealie.me(token).get("groupSlug")}
     return auth.templates.TemplateResponse(request, "gallery.html", ctx)

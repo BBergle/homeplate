@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 import httpx
@@ -23,7 +24,7 @@ class MealieLocked(MealieAuthError):
     """Mealie answered 423: too many failed logins."""
 
 
-def _request(method: str, path: str, token: str | None = None, **kw) -> dict | list:
+def _send(method: str, path: str, token: str | None = None, **kw) -> httpx.Response:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
         r = client.request(method, path, headers=headers, **kw)
@@ -39,7 +40,14 @@ def _request(method: str, path: str, token: str | None = None, **kw) -> dict | l
         raise MealieError(f"Mealie answered {r.status_code}")
     try:
         r.raise_for_status()
-        return r.json()
+    except httpx.HTTPError as e:
+        raise MealieError(type(e).__name__) from e
+    return r
+
+
+def _request(method: str, path: str, token: str | None = None, **kw) -> dict | list:
+    try:
+        return _send(method, path, token, **kw).json()
     except (httpx.HTTPError, ValueError) as e:
         raise MealieError(type(e).__name__) from e
 
@@ -63,6 +71,29 @@ def search_recipes(token: str, q: str) -> list[dict]:
 
 def recipe(token: str, slug_or_id: str) -> dict:
     return _request("GET", f"/api/recipes/{quote(slug_or_id, safe='')}", token)
+
+
+def create_share(token: str, recipe_id: str) -> str:
+    expires = (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat()
+    return _request("POST", "/api/shared/recipes", token, json={"recipeId": recipe_id, "expiresAt": expires})["id"]
+
+
+def delete_share(token: str, share_id: str) -> None:
+    try:
+        _send("DELETE", f"/api/shared/recipes/{quote(share_id, safe='')}", token)
+    except MealieNotFound:
+        pass
+
+
+def shared_recipe(share_id: str) -> dict:
+    return _request("GET", f"/api/recipes/shared/{quote(share_id, safe='')}")
+
+
+def recipe_image(recipe_id: str) -> bytes | None:
+    try:
+        return _send("GET", f"/api/media/recipes/{quote(recipe_id, safe='')}/images/min-original.webp").content
+    except MealieNotFound:
+        return None
 
 
 def planned_today(token: str) -> list[dict]:
