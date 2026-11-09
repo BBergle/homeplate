@@ -17,6 +17,13 @@
 </div>
 
 <div class="card">
+  <h2>Recipes you've cooked</h2>
+  {% if cooked %}<ul class="plain">{% for c in cooked %}
+    <li><a href="/r/{{ c['recipe_id'] }}">{{ c['recipe_name'] }}</a> <span class="muted">{{ c['n'] }}</span></li>
+  {% endfor %}</ul>{% else %}<p class="muted">Nothing yet.</p>{% endif %}
+</div>
+
+<div class="card">
   <h2>Weight</h2>
   {% if latest is none %}<p class="muted">No weight logged yet.</p>
   {% else %}<p>Latest: {{ latest }} lbs{% if user["weight_goal"] %} &middot; Goal: {{ user["weight_goal"] }} lbs{% endif %}</p>{% endif %}

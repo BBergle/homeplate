@@ -160,7 +160,7 @@ def photo(photo_id: int, user=Depends(auth.current_user)):
     con = db.connect()
     try:
         row = con.execute(
-            "SELECT path FROM photos WHERE id = ? AND user_id = ?", (photo_id, user["mealie_user_id"])
+            "SELECT path FROM photos WHERE id = ? AND (private = 0 OR user_id = ?)", (photo_id, user["mealie_user_id"])
         ).fetchone()
     finally:
         con.close()
@@ -168,6 +168,22 @@ def photo(photo_id: int, user=Depends(auth.current_user)):
     if not f or not os.path.exists(f):
         raise HTTPException(404)
     return FileResponse(f, media_type="image/jpeg")
+
+
+@router.post("/photos/{photo_id}/private")
+def toggle_private(photo_id: int, user=Depends(auth.current_user)):
+    con = db.connect()
+    try:
+        row = con.execute(
+            "SELECT recipe_id FROM photos WHERE id = ? AND user_id = ?", (photo_id, user["mealie_user_id"])
+        ).fetchone()
+        if not row:
+            raise HTTPException(404)
+        con.execute("UPDATE photos SET private = 1 - private WHERE id = ?", (photo_id,))
+        con.commit()
+    finally:
+        con.close()
+    return RedirectResponse(f"/r/{row['recipe_id']}", 303)
 
 
 @router.post("/weight")

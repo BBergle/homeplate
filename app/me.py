@@ -42,6 +42,11 @@ def _page(request, user, error=None):
         meals = con.execute(
             "SELECT day, recipe_id FROM entries WHERE user_id = ? AND kind IN ('cooked', 'leftovers')", (uid,)
         ).fetchall()
+        cooked = con.execute(
+            "SELECT recipe_id, recipe_name, COUNT(*) AS n FROM entries WHERE user_id = ? AND kind IN ('cooked', 'leftovers') "
+            "AND recipe_id IS NOT NULL GROUP BY recipe_id ORDER BY MAX(created_at) DESC",
+            (uid,),
+        ).fetchall()
         ws = con.execute(
             "SELECT date, lbs FROM weights WHERE user_id = ? AND date >= ? ORDER BY date",
             (uid, (t - timedelta(days=90)).isoformat()),
@@ -59,6 +64,7 @@ def _page(request, user, error=None):
             len(meals), len({m["recipe_id"] for m in meals if m["recipe_id"]}), stats.longest_run(totals, user["weekly_goal"])
         ),
         "saved": f"{stats.savings(len(meals), user['delivery_cost'], user['home_meal_cost']):,.0f}",
+        "cooked": cooked,
         "latest": points[-1][1] if points else None,
         "line": sparkline(points),
     }

@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from app import auth, me, mealie, today
+from app import auth, gallery, me, mealie, today
 
 MAX_BODY = 20 * 1024 * 1024
 
@@ -80,6 +80,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router)
 app.include_router(today.router)
 app.include_router(me.router)
+app.include_router(gallery.router)
 
 
 @app.exception_handler(auth.LoginRequired)

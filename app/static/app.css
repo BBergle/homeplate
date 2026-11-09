@@ -64,3 +64,6 @@ ul.plain li { min-height: 44px; display: flex; align-items: center; gap: 8px; }
 li.locked { color: var(--muted); }
 li.earned { font-weight: 600; }
 .spark { width: 100%; height: auto; color: var(--accent); }
+ul.gallery { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; display: block; }
+.gallery form { margin: 4px 0 0; display: flex; align-items: center; gap: 8px; }
