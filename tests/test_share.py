@@ -114,3 +114,11 @@ def test_share_requires_session_to_create(mock_mealie):
         r = c.post(f"/r/uuid-1/{p}", follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"] == "/login"
     assert rows("SELECT * FROM shares") == []
+
+
+def test_share_mealie_down_signed_in_shows_no_nav(login_as, mock_mealie):
+    u1, _, _ = shared(login_as, mock_mealie)
+    mock_mealie[("GET", f"/api/recipes/shared/{TOKEN}")] = httpx.ConnectError("boom")
+    r = u1.get(f"/s/{TOKEN}")
+    assert r.status_code == 502 and "Can't reach Mealie" in r.text
+    assert 'href="/me"' not in r.text and 'class="tabs"' not in r.text and "htmx" not in r.text
