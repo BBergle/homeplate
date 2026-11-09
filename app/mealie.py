@@ -10,6 +10,10 @@ class MealieError(Exception):
     """Mealie unreachable or answered 5xx."""
 
 
+class MealieNotFound(MealieError):
+    """Mealie answered 404."""
+
+
 class MealieAuthError(Exception):
     """Mealie rejected the credentials or token (401), or locked the account (423)."""
 
@@ -22,6 +26,8 @@ def _request(method: str, path: str, token: str | None = None, **kw) -> dict | l
         raise MealieError(type(e).__name__) from e
     if r.status_code in (401, 423):
         raise MealieAuthError()
+    if r.status_code == 404:
+        raise MealieNotFound()
     if r.status_code >= 500:
         raise MealieError(f"Mealie answered {r.status_code}")
     try:

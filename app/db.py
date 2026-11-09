@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS weights (
 
 
 def connect() -> sqlite3.Connection:
-    con = sqlite3.connect(os.path.join(os.environ.get("DATA_DIR", "/data"), "homeplate.db"))
+    data_dir = os.environ.get("DATA_DIR", "/data")
+    os.makedirs(data_dir, exist_ok=True)
+    con = sqlite3.connect(os.path.join(data_dir, "homeplate.db"))
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA)

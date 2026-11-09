@@ -34,14 +34,14 @@ def test_requires_session(mock_mealie):
 
 def test_mealie_down(client, mock_mealie):
     mock_mealie[("GET", "/api/households/mealplans/today")] = httpx.ConnectError("down")
-    r = client.get("/")
+    r = client.get("/recipes/search")
     assert r.status_code == 502
     assert "Can't reach Mealie" in r.text
 
 
 def test_token_expired(client, mock_mealie):
     mock_mealie[("GET", "/api/households/mealplans/today")] = httpx.Response(401)
-    r = client.get("/", follow_redirects=False)
+    r = client.get("/recipes/search", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login"
     assert db.connect().execute("SELECT count(*) FROM sessions").fetchone()[0] == 0
 
