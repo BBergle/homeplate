@@ -96,7 +96,7 @@ def add_entry(
             r = mealie.recipe(user["mealie_token"], recipe_id)
         except mealie.MealieNotFound:
             return _page(request, user, "That recipe no longer exists")
-        name = r["name"]
+        recipe_id, name = r["id"], r["name"]  # Mealie's canonical id, not the posted string
         nutrition = r.get("nutrition") or {}
         if cal is None:
             cal = mealie.leading_number(nutrition.get("calories"))

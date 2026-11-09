@@ -166,3 +166,81 @@ def test_huge_calories_rejected(client):
     r = client.post("/entries", data={"kind": "other", "description": "x", "calories": "1e300"})
     assert r.status_code == 200 and "Calories must be a number" in r.text
     assert not rows("SELECT * FROM entries")
+
+
+def test_posted_slug_stores_mealie_id(client, mock_mealie):
+    mock_mealie[("GET", "/api/recipes/chili")] = httpx.Response(200, json={"id": "uuid-1", "name": "Chili"})
+    client.post(
+        "/entries", data={"kind": "cooked", "recipe_id": "chili", "show_photo": "on"},
+        files={"photo": ("a.jpg", jpeg((50, 50)), "image/jpeg")},
+    )
+    assert rows("SELECT recipe_id FROM entries")[0][0] == "uuid-1"
+    assert rows("SELECT recipe_id FROM photos")[0][0] == "uuid-1"
+
+
+def test_recipe_id_is_quoted_in_mealie_path(client, mock_mealie):
+    # httpx reports the decoded path; an unquoted id would have become /api/users/self (200, saved)
+    mock_mealie[("GET", "/api/recipes/../users/self")] = httpx.Response(404)
+    mock_mealie[("GET", "/api/recipes/x?perPage=1")] = httpx.Response(404)
+    for rid in ("../users/self", "x?perPage=1"):
+        r = client.post("/entries", data={"kind": "cooked", "recipe_id": rid})
+        assert "That recipe no longer exists" in r.text
+    assert not rows("SELECT * FROM entries")
+
+
+def test_oversized_body_is_413(client):
+    big = b"0" * (21 * 1024 * 1024)
+    assert client.post("/entries", content=big, headers={"content-type": "application/octet-stream"}).status_code == 413
+    # chunked: no Content-Length, so the byte counter has to catch it
+    head = b'--x\r\nContent-Disposition: form-data; name="photo"; filename="a.jpg"\r\n\r\n'
+    body = head + big + b"\r\n--x--\r\n"
+    r = client.post(
+        "/entries", content=(body[i : i + 1024 * 1024] for i in range(0, len(body), 1024 * 1024)),
+        headers={"content-type": "multipart/form-data; boundary=x"},
+    )
+    assert r.status_code == 413
+    assert not rows("SELECT * FROM entries")
+
+
+def test_oversized_body_rejected_before_auth(mock_mealie):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    r = TestClient(app).post("/entries", content=b"0" * (21 * 1024 * 1024), follow_redirects=False)
+    assert r.status_code == 413
+
+
+def test_normal_upload_still_works(client):
+    client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("a.jpg", b"1" * 100)})
+    assert len(rows("SELECT * FROM entries")) == 1
+
+
+def test_docs_are_not_public(mock_mealie):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    c = TestClient(app)
+    for p in ("/docs", "/redoc", "/openapi.json"):
+        assert c.get(p, follow_redirects=False).status_code in (303, 404)
+
+
+def test_non_image_formats_rejected(client):
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 10)).save(buf, "GIF")
+    r = client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("a.gif", buf.getvalue())})
+    assert "That file isn" in r.text and not rows("SELECT * FROM photos")
+
+
+def test_search_box_is_outside_the_form(client):
+    t = client.get("/").text
+    form = t[t.index('action="/entries"'):]
+    assert 'name="q"' not in form[: form.index("</form>")]
+    assert 'name="q"' in t
+
+
+def test_ids_are_not_reused(client):
+    client.post("/entries", data={"kind": "other", "description": "a"})
+    first = rows("SELECT id FROM entries")[0][0]
+    client.post(f"/entries/{first}/delete")
+    client.post("/entries", data={"kind": "other", "description": "b"})
+    assert rows("SELECT id FROM entries")[0][0] > first

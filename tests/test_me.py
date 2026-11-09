@@ -82,3 +82,22 @@ def test_sparkline():
     for p in pts:
         x, y = map(float, p.split(","))
         assert 0 <= x <= 320 and 0 <= y <= 80
+
+
+def test_me_with_only_future_entries(client, monkeypatch):
+    freeze(monkeypatch)
+    entry("cooked", "2026-12-01")
+    assert client.get("/me").status_code == 200
+
+
+def test_users_do_not_see_each_others_data(client, login_as, monkeypatch):
+    freeze(monkeypatch)
+    client.post("/entries", data={"kind": "other", "description": "secret-u1-meal", "calories": "777"})
+    client.post("/weight", data={"lbs": "123.4"})
+    entry("cooked")
+    entry("cooked")
+    assert "secret-u1-meal" in client.get("/").text and "2 of 3" in client.get("/me").text
+    c2 = login_as("u2")
+    t = c2.get("/").text
+    assert "secret-u1-meal" not in t and "777" not in t and "123.4" not in t
+    assert "0 of 3" in c2.get("/me").text

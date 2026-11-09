@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS entries (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
     day TEXT NOT NULL,
     created_at TEXT NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS entries (
     protein_g REAL
 );
 CREATE TABLE IF NOT EXISTS photos (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     entry_id INTEGER REFERENCES entries(id),
     user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
     recipe_id TEXT,

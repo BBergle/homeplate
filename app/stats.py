@@ -5,7 +5,8 @@ def week_totals(days: list[date], today: date) -> list[int]:
     if not days:
         return [0]
     monday = lambda d: d - timedelta(days=d.weekday())
-    first, last = monday(min(days)), monday(today)
+    last = monday(today)
+    first = min(monday(min(days)), last)
     totals = [0] * ((last - first).days // 7 + 1)
     for d in days:
         i = (monday(d) - first).days // 7

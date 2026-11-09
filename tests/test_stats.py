@@ -21,6 +21,7 @@ def test_week_totals():
     days = [date(2026, 11, 2), date(2026, 11, 8), date(2026, 11, 9)]
     assert stats.week_totals(days, date(2026, 11, 9)) == [2, 1]
     assert stats.week_totals([], date(2026, 11, 9)) == [0]
+    assert stats.week_totals([date(2026, 12, 1)], date(2026, 11, 9)) == [0]  # entries all after today
 
 
 def test_savings_and_achievements():

@@ -1,5 +1,6 @@
 import os
 import re
+from urllib.parse import quote
 
 import httpx
 
@@ -18,13 +19,19 @@ class MealieAuthError(Exception):
     """Mealie rejected the credentials or token (401), or locked the account (423)."""
 
 
+class MealieLocked(MealieAuthError):
+    """Mealie answered 423: too many failed logins."""
+
+
 def _request(method: str, path: str, token: str | None = None, **kw) -> dict | list:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
         r = client.request(method, path, headers=headers, **kw)
     except httpx.HTTPError as e:
         raise MealieError(type(e).__name__) from e
-    if r.status_code in (401, 423):
+    if r.status_code == 423:
+        raise MealieLocked()
+    if r.status_code == 401:
         raise MealieAuthError()
     if r.status_code == 404:
         raise MealieNotFound()
@@ -55,7 +62,7 @@ def search_recipes(token: str, q: str) -> list[dict]:
 
 
 def recipe(token: str, slug_or_id: str) -> dict:
-    return _request("GET", f"/api/recipes/{slug_or_id}", token)
+    return _request("GET", f"/api/recipes/{quote(slug_or_id, safe='')}", token)
 
 
 def planned_today(token: str) -> list[dict]:

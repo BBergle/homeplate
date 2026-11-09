@@ -9,11 +9,12 @@
 
 <ul class="entries">{% for e in entries %}{% include "_entry.html" %}{% else %}<li class="muted">Nothing logged yet.</li>{% endfor %}</ul>
 
-<form class="card" method="post" action="/entries" enctype="multipart/form-data">
-  <h2>I cooked</h2>
+<section class="card">
+<h2>I cooked</h2>
+<input type="search" name="q" placeholder="Search recipes" autocomplete="off"
+       hx-get="/recipes/search" hx-trigger="load, input changed delay:300ms" hx-target="#recipes">
+<form method="post" action="/entries" enctype="multipart/form-data">
   <input type="hidden" name="kind" value="cooked">
-  <input type="search" name="q" placeholder="Search recipes" autocomplete="off"
-         hx-get="/recipes/search" hx-trigger="load, input changed delay:300ms" hx-target="#recipes">
   <div id="recipes"></div>
   <label>Photo <input type="file" name="photo" accept="image/*"></label>
   <label class="check"><input type="checkbox" name="show_photo" value="on" checked> Show on recipe page</label>
@@ -23,6 +24,7 @@
   <label>Protein (g) <input type="number" name="protein_g" min="0" step="any" inputmode="numeric"></label>
   <button type="submit">Log meal</button>
 </form>
+</section>
 
 <form class="card" method="post" action="/entries">
   <h2>Add food</h2>

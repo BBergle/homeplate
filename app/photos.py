@@ -15,7 +15,7 @@ def save(upload_bytes: bytes) -> str:
     if len(upload_bytes) > MAX_BYTES:
         raise ValueError("too large")
     try:
-        img = ImageOps.exif_transpose(Image.open(io.BytesIO(upload_bytes))).convert("RGB")
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(upload_bytes), formats=["JPEG", "PNG", "WEBP"])).convert("RGB")
     except Exception as e:
         raise ValueError("not an image") from e
     img.thumbnail((1600, 1600))

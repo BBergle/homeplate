@@ -35,7 +35,12 @@ def current_user(request: Request):
         if not row or datetime.fromisoformat(row["expires_at"]) <= now:
             raise LoginRequired()
         if now - datetime.fromisoformat(row["refreshed_at"]) > timedelta(hours=24):
-            token = mealie.refresh(row["mealie_token"])
+            try:
+                token = mealie.refresh(row["mealie_token"])
+            except mealie.MealieAuthError:
+                raise
+            except mealie.MealieError:
+                return row  # Mealie down: keep the old token, refreshed_at unchanged so the next request retries
             con.execute(
                 "UPDATE sessions SET mealie_token = ?, refreshed_at = ?, expires_at = ? WHERE id = ?",
                 (token, now.isoformat(), (now + timedelta(days=SESSION_DAYS)).isoformat(), request.cookies["sid"]),
@@ -69,8 +74,9 @@ def login_form(request: Request):
 def login(request: Request, username: str = Form(), password: str = Form()):
     try:
         token = mealie.login(username, password)
-    except mealie.MealieAuthError:
-        return templates.TemplateResponse(request, "login.html", {"error": True}, status_code=401)
+    except mealie.MealieAuthError as e:
+        error = "Too many attempts. Try again later." if isinstance(e, mealie.MealieLocked) else "Wrong username or password"
+        return templates.TemplateResponse(request, "login.html", {"error": error}, status_code=401)
     user = mealie.me(token)
     now = _now()
     sid = secrets.token_urlsafe(32)
@@ -86,7 +92,7 @@ def login(request: Request, username: str = Form(), password: str = Form()):
     con.close()
     resp = RedirectResponse("/", 303)
     resp.set_cookie(
-        "sid", sid, max_age=SESSION_DAYS * 86400, httponly=True, samesite="lax",
+        "sid", sid, max_age=400 * 86400, httponly=True, samesite="lax",
         secure=os.environ.get("BASE_URL", "").startswith("https"),
     )
     return resp
