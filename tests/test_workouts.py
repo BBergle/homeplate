@@ -1,3 +1,4 @@
+import re
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -157,3 +158,9 @@ def test_activity_icon(client):
     add_workout(activity="running")
     t = client.get("/").text
     assert t.count("icon-bike") == 1 and t.count("icon-activity") == 1
+
+
+def test_estimate_fragment_shows_no_weight_hint(client):
+    r = client.post("/workouts/estimate", data={"activity": "cycling", "intensity": "moderate", "minutes": "60"})
+    m = re.search(r'<p id="workout-hint"[^>]*>(.*?)</p>', r.text, re.S)
+    assert m and "Log your weight for a better estimate." in m.group(1)
