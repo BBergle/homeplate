@@ -19,7 +19,7 @@ homeplate is on http://localhost:8000 (`/healthz`), Mealie on http://localhost:9
 | `SECRET_KEY` | Signs the private status links for account requests. Set a long random value and keep it the same. If it is not set, the app falls back to a built-in placeholder. That only lets someone make a fake "request sent" page appear and exposes nothing, but you should still set it. It also encrypts saved AI keys: the app will not save an AI key while it is unset or a placeholder (`dev`, `change-me`), and changing it means everyone re-enters their key. |
 | `BASE_URL` | homeplate's real public address, such as `https://plate.example.com`. An `https` address turns on the cookie `Secure` flag. It is the address used in join links. Form posts are accepted only from this address or the address the request arrived on. |
 | `TZ` | Time zone that decides the date the assistant is told (default `UTC`). |
-| `DATA_DIR` | Where the database and the recipe card photos live (default `/data`). |
+| `DATA_DIR` | Where the database and photos live (default `/data`). The `cards` folder holds recipe card photos. The `photos` folder is from earlier versions and is kept. |
 
 ## Accounts
 
@@ -30,6 +30,10 @@ An admin can also switch on account requests (Settings, then Admin; off by defau
 Anyone can type any name and email into the request form, and homeplate does not check them. Before you approve, check with the person that the request is really theirs. Otherwise a stranger could get an account in someone else's name.
 
 While account requests are on, at most 20 requests can wait at once. Further requests are silently ignored until you decide some. Turn the switch off when you are not expecting anyone.
+
+## Upgrading from an earlier version
+
+Earlier versions had a diary, weight, workouts and photos. That data stays in the database and in the `photos` folder under the data folder. It is no longer shown. Do not delete it if you might want it back.
 
 ## Deploying
 

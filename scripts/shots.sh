@@ -16,13 +16,8 @@ sed -e 's/@media *(prefers-color-scheme: *dark)/@media all/g' "$OUT/app.css" > "
 # light variant: switch the dark blocks off, whatever the machine's own appearance is
 sed -e 's/@media *(prefers-color-scheme: *dark)/@media not all/g' "$OUT/app.css" > "$OUT/app-light.css"
 for p in "${PATHS[@]}"; do
-  n=$(echo "$p" | sed -e 's#^/$#today#' -e 's#^/##' -e 's#[/?=&]#_#g')
+  n=$(echo "$p" | sed -e 's#^/$#home#' -e 's#^/##' -e 's#[/?=&]#_#g')
   if [ "$p" = /login ] || [[ "$p" == /s/* ]] || [[ "$p" == /join/* ]]; then curl -s "$BASE$p" > "$OUT/$n.raw"; else curl -s -b "$JAR" "$BASE$p" > "$OUT/$n.raw"; fi
-  # signed-in photos need the cookie, which a file:// page cannot send: fetch them and point the page at local copies
-  for id in $(grep -o 'src="/photos/[0-9]*"' "$OUT/$n.raw" | grep -o '[0-9]*' | sort -u); do
-    curl -s -b "$JAR" "$BASE/photos/$id" > "$OUT/photo-$id.jpg"
-    sed -i '' -e "s#src=\"/photos/$id\"#src=\"file://$OUT/photo-$id.jpg\"#g" "$OUT/$n.raw"
-  done
   for mode in light dark; do
     css=app-light.css; [ $mode = dark ] && css=app-dark.css
     # local stylesheet copy, absolute base for images, htmx removed (it would redirect a cookieless file:// page)

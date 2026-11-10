@@ -2,6 +2,7 @@ import os
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -118,6 +119,13 @@ def mealie_error(request: Request, exc):
         return HTMLResponse('<p class="msg msg-error" role="alert">Can\'t reach Mealie</p>')
     page = "public_error.html" if _is_public_form(request.url.path) else "error.html"
     return auth.templates.TemplateResponse(request, page, {}, status_code=502)
+
+
+@app.exception_handler(404)
+async def not_found(request: Request, exc):
+    if request.headers.get("HX-Request") or request.url.path.startswith("/static/"):
+        return await http_exception_handler(request, exc)
+    return auth.templates.TemplateResponse(request, "notfound.html", {}, status_code=404)
 
 
 @app.get("/")

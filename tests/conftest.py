@@ -15,7 +15,7 @@ def data_dir(tmp_path, monkeypatch):
 @pytest.fixture
 def mock_mealie(monkeypatch):
     """Dict of (method, path) -> httpx.Response (or an exception to raise). Edit it in tests."""
-    routes = {("GET", "/api/households/mealplans/today"): httpx.Response(200, json=[])}
+    routes = {}
 
     def handler(request):
         out = routes[(request.method, request.url.path)]

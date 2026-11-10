@@ -535,6 +535,12 @@ def test_cards_render_under_their_answer(ai_client, mealie_url):
     assert html.count("<img") == 1
 
 
+def test_card_added_before_the_change_has_no_link(ai_client, mealie_url):
+    add_card(status="done", result="the-slug")
+    html = ai_client.get("/ask/chat").text
+    assert "Added to your recipes." in html and "Open in Mealie" not in html and "cook.example" not in html
+
+
 def test_card_without_photo_or_form_when_not_open(ai_client):
     add_card(importable=False)
     add_card(hours_ago=25)

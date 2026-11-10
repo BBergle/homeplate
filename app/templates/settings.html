@@ -6,7 +6,7 @@
   <h2>AI assistant</h2>
   <form method="post" action="/settings/ai" class="ai-settings">
     {% if ai_msg %}<p class="msg" role="alert">{{ ai_msg }}</p>{% endif %}
-    <p class="muted">Bring your own OpenRouter key to use the Ask tab. What you type there is sent to OpenRouter under your key. Your weight is never sent.</p>
+    <p class="muted">Bring your own OpenRouter key to use the Ask tab. What you type there is sent to OpenRouter under your key.</p>
     <label>OpenRouter key <input type="password" name="key" autocomplete="off" maxlength="300"></label>
     {% if has_ai_key %}<p class="muted">A key is saved. Type a new one to replace it.</p>{% endif %}
     <label>Model <input type="text" name="model" value="{{ user['ai_model'] or '' }}" placeholder="openai/gpt-5-nano" maxlength="100"></label>
