@@ -32,6 +32,21 @@ The owner wants the app to do the thinking that stops them cooking: finding some
 - Images on result cards are fetched by the server, not by the phone, and only for links that the assistant itself proposed.
 - If Mealie cannot import a web page, the card says so and suggests pasting the recipe text. The server does not scrape pages itself.
 
+## Calls settled after a builder read the design (mine, not the owner's)
+
+- **Keys need a real `SECRET_KEY`.** The app refuses to save an AI key while `SECRET_KEY` is unset or still a placeholder (`dev`, `change-me`), and says why. Otherwise stored keys would be readable by anyone with the database file.
+- **No key yet:** the Ask tab stays in the tab bar and shows a short "add your key in Settings" page.
+- **Default model:** `openai/gpt-5-nano` on OpenRouter (the cheapest found with tools, photos and built-in search). The person can type another model name; the app checks OpenRouter's model list and warns if the model lacks tools or photo input.
+- **No spending cap in the app.** Each message is limited to six look-up rounds; web searches are billed per search by the provider, and a spending limit can be set on the key at the provider.
+- **Shopping list:** Mealie allows several lists. "Add to list" uses the person's first list and names it on the card.
+- **Old cards:** a proposal older than a day shows "Expired, ask again" in place of its button.
+- **Meal plan and nutrition proposals** may only refer to recipe ids that a look-up returned in that conversation; anything else is rejected.
+- **Result-card images:** fetched only over https, only from public internet addresses (private and local addresses are refused, including after redirects), with a size limit.
+- **Photos sent to the model** are shrunk to about 1280 pixels first. The photo itself is not kept in the conversation history.
+- **Provider errors** (bad key, out of credit, rate limit) show a plain message and keep any cards already made.
+- **Longer waits:** model calls and Mealie's link import get their own, longer time limits than the app's normal 10 seconds.
+- **The model is told today's date** in the app's timezone.
+
 ## How a turn works
 
 1. The person sends a message, optionally with one photo.
@@ -106,6 +121,7 @@ The first piece of work is a live test, before anything else is built on these:
 2. Whether a photo and a web search can go in the same request.
 3. How well searches surface and read Reddit threads.
 4. That the YouTube API is free at these volumes (believed so; the page read did not state a price).
+5. Whether the model can be made to return a fixed data format (for the standard recipe format and for estimates) in the same request that uses tools.
 
 If 1 fails, the fallback is two requests per message: one to search, one to produce cards.
 
