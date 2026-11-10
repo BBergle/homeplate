@@ -455,6 +455,15 @@ def test_new_chat_deletes_proposals_and_photos(ai_client, mock_ai, scrape_ok, fa
     assert proposals() == [] and not (data_dir / "cards" / f"{pid}.jpg").exists()
 
 
+def test_new_chat_keeps_other_persons_cards(ai_client, login_as, data_dir):
+    other = login_as("u2")
+    add_card(user_id="u2", photo=True)
+    (data_dir / "cards").mkdir()
+    (data_dir / "cards" / "1.jpg").write_bytes(b"x")
+    ai_client.post("/ask/new", follow_redirects=False)
+    assert len(proposals()) == 1 and (data_dir / "cards" / "1.jpg").exists()
+
+
 def test_shown_notes_are_per_person(ai_client, mock_ai, scrape_ok, fake_web):
     bodies = sequence(mock_ai, reply("A1"), reply("A2"))
     ai_client.post("/ask", data={"message": "Q1"}, headers=HX)
@@ -467,3 +476,133 @@ def test_shown_notes_are_per_person(ai_client, mock_ai, scrape_ok, fake_web):
     con.close()
     ai_client.post("/ask", data={"message": "Q2"}, headers=HX)
     assert bodies[1]["messages"][2] == {"role": "assistant", "content": "A1"}
+
+
+def add_card(status="open", hours_ago=0, importable=True, photo=False, user_id="u1", result=None, **payload):
+    at = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat()
+    body = {"name": "Soup", "url": "https://r.example/soup", "host": "r.example", "why": "Easy.", "importable": importable, "photo": photo} | payload
+    con = db.connect()
+    mid = con.execute("INSERT INTO chat_messages (user_id, role, content, created_at) VALUES (?, 'assistant', 'Here.', ?)", (user_id, at)).lastrowid
+    cid = con.execute("INSERT INTO proposals (user_id, message_id, kind, payload, status, result, created_at) VALUES (?, ?, 'recipe', ?, ?, ?, ?)",
+                      (user_id, mid, json.dumps(body), status, result, at)).lastrowid
+    con.commit()
+    con.close()
+    return cid
+
+
+def card_row(cid):
+    con = db.connect()
+    r = con.execute("SELECT * FROM proposals WHERE id = ?", (cid,)).fetchone()
+    con.close()
+    return r
+
+
+@pytest.fixture
+def imports(mock_mealie):
+    calls = []
+
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(200, json="the-slug")
+
+    mock_mealie[("POST", "/api/recipes/create/url")] = handler
+    return calls
+
+
+def test_cards_render_under_their_answer(ai_client):
+    a = add_card(photo=True)
+    html = ai_client.get("/ask/chat").text
+    assert "Soup" in html and "r.example" in html and "Easy." in html
+    assert f'hx-post="/ask/cards/{a}"' in html and f'hx-target="#rcard-{a}"' in html and 'hx-swap="outerHTML"' in html and ">Add</button>" in html
+    assert '<a class="rcard-link" href="https://r.example/soup" target="_blank" rel="noopener noreferrer">Open page</a>' in html
+    assert f'<img class="rcard-photo" src="/ask/cards/{a}/photo" alt="" loading="lazy">' in html
+    add_card(importable=False)
+    add_card(hours_ago=25)
+    add_card(status="done", result="the-slug")
+    add_card(status="working")
+    add_card(status="failed", result="Mealie couldn't read that page.")
+    html = ai_client.get("/ask/chat").text
+    for s in ("Mealie can't import this page.", "Expired, ask again.", "Added to your recipes.", 'href="/r/the-slug"',
+              "Still adding. Check your recipes in a minute.", "Mealie couldn&#39;t read that page."):
+        assert s in html
+    assert html.count("<img") == 1
+
+
+def test_card_without_photo_or_form_when_not_open(ai_client):
+    add_card(importable=False)
+    add_card(hours_ago=25)
+    add_card(status="done", result="s")
+    html = ai_client.get("/ask/chat").text
+    assert "<img" not in html and 'hx-post="/ask/cards/' not in html
+
+
+def test_card_text_is_escaped(ai_client):
+    add_card(name="<script>x</script>")
+    html = ai_client.get("/ask/chat").text
+    assert "&lt;script&gt;" in html and "<script>x" not in html
+
+
+def test_add_imports_once(ai_client, imports):
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert r.status_code == 200 and "Added to your recipes." in r.text and r.text.lstrip().startswith("<li")
+    assert imports == [{"url": "https://r.example/soup", "includeTags": False}]
+    ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert len(imports) == 1 and card_row(a)["status"] == "done" and card_row(a)["result"] == "the-slug"
+
+
+def test_add_ignores_posted_address(ai_client, imports):
+    a = add_card()
+    ai_client.post(f"/ask/cards/{a}", data={"url": "https://evil.example"}, headers=HX)
+    assert imports == [{"url": "https://r.example/soup", "includeTags": False}]
+
+
+def test_add_refused_page(ai_client, mock_mealie):
+    calls = []
+    mock_mealie[("POST", "/api/recipes/create/url")] = lambda req: calls.append(1) or httpx.Response(400, json={})
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert card_row(a)["status"] == "failed" and "Mealie couldn&#39;t read that page." in r.text
+    ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert len(calls) == 1
+
+
+def test_add_mealie_down(ai_client, mock_mealie):
+    mock_mealie[("POST", "/api/recipes/create/url")] = httpx.ConnectError("down")
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert card_row(a)["status"] == "open" and "Can&#39;t reach Mealie. Try again." in r.text and "Add</button>" in r.text
+    assert "Can&#39;t reach Mealie" not in ai_client.get("/ask/chat").text
+
+
+def test_add_expired_or_not_importable(ai_client, imports):
+    a, b = add_card(hours_ago=25), add_card(importable=False)
+    for cid in (a, b):
+        r = ai_client.post(f"/ask/cards/{cid}", headers=HX)
+        assert r.status_code == 200 and card_row(cid)["status"] == "open"
+    assert imports == []
+    assert "Expired, ask again." in ai_client.post(f"/ask/cards/{a}", headers=HX).text
+
+
+def test_other_persons_card(ai_client, login_as, imports):
+    login_as("u2")
+    a = add_card(user_id="u2", photo=True)
+    assert ai_client.post(f"/ask/cards/{a}", headers=HX).status_code == 404
+    assert ai_client.get(f"/ask/cards/{a}/photo").status_code == 404
+    assert ai_client.post("/ask/cards/999").status_code == 404
+    assert imports == [] and card_row(a)["status"] == "open"
+
+
+def test_photo_route(ai_client, data_dir):
+    a = add_card(photo=True)
+    assert ai_client.get(f"/ask/cards/{a}/photo").status_code == 404
+    (data_dir / "cards").mkdir()
+    (data_dir / "cards" / f"{a}.jpg").write_bytes(b"\xff\xd8jpg")
+    r = ai_client.get(f"/ask/cards/{a}/photo")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg" and r.headers["cache-control"] == "private, max-age=86400"
+
+
+def test_plain_post_redirects_to_ask(ai_client, imports):
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ask" and card_row(a)["status"] == "done"

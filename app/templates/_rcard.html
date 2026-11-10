@@ -1,0 +1,16 @@
+<li class="rcard" id="rcard-{{ c.id }}">
+  {% if c.photo %}<img class="rcard-photo" src="/ask/cards/{{ c.id }}/photo" alt="" loading="lazy">{% endif %}
+  <p class="rcard-name">{{ c.name }}</p>
+  <p class="rcard-host">{{ c.host }}</p>
+  <p class="rcard-why">{{ c.why }}</p>
+  {% if c.status == "done" %}<p class="rcard-note">Added to your recipes. <a href="/r/{{ c.result }}">Open recipe</a></p>
+  {% elif c.status == "working" %}<p class="rcard-note">Still adding. Check your recipes in a minute.</p>
+  {% elif c.status == "failed" %}<p class="rcard-note">{{ c.result }}</p>
+  {% elif not c.importable %}<p class="rcard-note">Mealie can't import this page.</p>
+  {% elif c.expired %}<p class="rcard-note">Expired, ask again.</p>
+  {% else %}
+  {% if c.note %}<p class="rcard-note">{{ c.note }}</p>{% endif %}
+  <form method="post" action="/ask/cards/{{ c.id }}" hx-post="/ask/cards/{{ c.id }}" hx-target="#rcard-{{ c.id }}" hx-swap="outerHTML"><button class="btn" type="submit">Add</button></form>
+  {% endif %}
+  <a class="rcard-link" href="{{ c.url }}" target="_blank" rel="noopener noreferrer">Open page</a>
+</li>

@@ -3,8 +3,8 @@ import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from app import ai, asktools, auth, db, me, mealie, today, webimg
 
@@ -23,11 +23,20 @@ SYSTEM = (
     "Use only pages your search returned. Use search_my_recipes and get_recipe for questions about their own saved recipes."
 )
 ROUNDS = 6
+EXPIRE_HOURS = 24
 FAILED = "The AI service didn't answer. Try again."
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _card(row, note=None) -> dict:
+    p = json.loads(row["payload"])
+    expired = row["created_at"] <= (_now() - timedelta(hours=EXPIRE_HOURS)).isoformat()
+    return {"id": row["id"], "message_id": row["message_id"], "status": row["status"], "result": row["result"],
+            "name": p["name"], "url": p["url"], "host": p.get("host", ""), "why": p.get("why", ""),
+            "photo": p.get("photo", False), "importable": p.get("importable", False), "expired": expired, "note": note}
 
 
 def _conversation(uid: str) -> list[dict]:
@@ -41,9 +50,10 @@ def _conversation(uid: str) -> list[dict]:
         )
         con.commit()
         out = con.execute("SELECT * FROM chat_messages WHERE user_id = ? ORDER BY id", (uid,)).fetchall()
+        cards = [_card(r) for r in con.execute("SELECT * FROM proposals WHERE user_id = ? ORDER BY id", (uid,)).fetchall()]
     finally:
         con.close()
-    return [dict(r) | {"sources": json.loads(r["sources"] or "[]")} for r in out]
+    return [dict(r) | {"sources": json.loads(r["sources"] or "[]"), "cards": [c for c in cards if c["message_id"] == r["id"]]} for r in out]
 
 
 def _fragment(request, uid):
@@ -208,6 +218,73 @@ def ask_new(user=Depends(auth.current_user)):
     finally:
         con.close()
     return RedirectResponse("/ask", 303)
+
+
+def _own_card(con, card_id: int, uid: str):
+    row = con.execute("SELECT * FROM proposals WHERE id = ? AND user_id = ?", (card_id, uid)).fetchone()
+    if row is None:
+        raise HTTPException(404)
+    return row
+
+
+@router.post("/ask/cards/{card_id}")
+def card_add(request: Request, card_id: int, user=Depends(auth.current_user)):
+    uid = user["mealie_user_id"]
+    note = None
+    con = db.connect()
+    try:
+        row = _own_card(con, card_id, uid)
+        cutoff = (_now() - timedelta(hours=EXPIRE_HOURS)).isoformat()
+        claimed = con.execute(
+            "UPDATE proposals SET status = 'working' WHERE id = ? AND user_id = ? AND status = 'open' AND created_at > ?", (card_id, uid, cutoff)
+        ).rowcount
+        con.commit()
+        card = _card(row)
+        if claimed and not card["importable"]:
+            con.execute("UPDATE proposals SET status = 'open' WHERE id = ?", (card_id,))
+            con.commit()
+            claimed = 0
+    finally:
+        con.close()
+    if claimed:
+        status, result = "done", None
+        try:
+            result = mealie.import_url(user["mealie_token"], card["url"])
+        except mealie.MealieRejected:
+            status, result = "failed", "Mealie couldn't read that page."
+        except mealie.MealieError:
+            status, note = "open", "Can't reach Mealie. Try again."
+        except BaseException:  # includes MealieAuthError: free the card, then let the app's handler send them to sign in
+            status = "open"
+            raise
+        finally:
+            con = db.connect()
+            try:
+                con.execute("UPDATE proposals SET status = ?, result = ? WHERE id = ?", (status, result, card_id))
+                con.commit()
+            finally:
+                con.close()
+    if not request.headers.get("HX-Request"):
+        return RedirectResponse("/ask", 303)
+    con = db.connect()
+    try:
+        row = _own_card(con, card_id, uid)
+    finally:
+        con.close()
+    return auth.templates.TemplateResponse(request, "_rcard.html", {"c": _card(row, note)})
+
+
+@router.get("/ask/cards/{card_id}/photo")
+def card_photo(card_id: int, user=Depends(auth.current_user)):
+    con = db.connect()
+    try:
+        _own_card(con, card_id, user["mealie_user_id"])
+    finally:
+        con.close()
+    path = os.path.join(asktools.photos_dir(), f"{card_id}.jpg")
+    if not os.path.isfile(path):
+        raise HTTPException(404)
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.post("/settings/ai")
