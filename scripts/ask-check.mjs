@@ -42,7 +42,7 @@ const note = (text) => out.push("NOTE  " + text);
 const token = (await (await fetch(`${MEALIE}/api/auth/token`, { method: "POST", body: new URLSearchParams({ username: USER, password: PASS }) })).json()).access_token;
 const mealie = (path, init = {}) => fetch(MEALIE + path, { ...init, headers: { Authorization: `Bearer ${token}` } });
 const named = async (name) => (await (await mealie(`/api/recipes?search=${encodeURIComponent(name)}`)).json()).items.filter((r) => r.name === name);
-let added = null;
+let added = null, existing = [];
 
 try {
   await cdp("Page.enable"); await size(390); await scheme("light");
@@ -77,7 +77,8 @@ try {
   // 2. Add imports once and links to the recipe
   const first = (cards || []).find((c) => c.add);
   if (first) {
-    const before = (await named(first.name)).length;
+    existing = (await named(first.name)).map((r) => r.slug);
+    const before = existing.length;
     await js(`document.querySelector('#${first.id} form button').click()`);
     const ok = await until(`document.querySelector('#${first.id}')?.textContent.includes('Added to your recipes.')`, 90);
     check("card becomes Added without a reload", ok && (await js(`window.__loaded === performance.timeOrigin`)), await js(`document.querySelector('#${first.id} .rcard-note')?.textContent`));
@@ -109,7 +110,7 @@ try {
   }
 } catch (e) { out.push("SCRIPT ERROR " + (e.stack || e)); }
 
-if (added) for (const r of await named(added)) { const d = await mealie(`/api/recipes/${r.slug}`, { method: "DELETE" }); note(`cleanup: deleted ${r.slug} from the test Mealie (${d.status})`); }
+if (added) for (const r of (await named(added)).filter((r) => !existing.includes(r.slug))) { const d = await mealie(`/api/recipes/${r.slug}`, { method: "DELETE" }); note(`cleanup: deleted ${r.slug} from the test Mealie (${d.status})`); }
 console.log(out.join("\n"));
 console.log(`screenshots in ${OUT}shots`);
 ws.close(); chrome.kill();
