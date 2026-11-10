@@ -80,7 +80,6 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router)
 app.include_router(ask.router)
 app.include_router(settings.router)
-app.include_router(settings.router)
 app.include_router(invite.router)
 app.include_router(access.router)
 
