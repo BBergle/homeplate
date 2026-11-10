@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 
-from app import auth, db, mealie, photos
+from app import auth, db, mealie, photos, stats
 
 router = APIRouter()
 
@@ -15,31 +15,52 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _tz() -> ZoneInfo:
+    return ZoneInfo(os.environ.get("TZ", "UTC"))
+
+
 def local_today() -> date:
-    return _now().astimezone(ZoneInfo(os.environ.get("TZ", "UTC"))).date()
+    return _now().astimezone(_tz()).date()
 
 
-def _page(request, user, error=None):
-    day = local_today().isoformat()
+def _time_label(created_at: str) -> str:
+    t = datetime.fromisoformat(created_at).astimezone(_tz())
+    return f"{t.hour % 12 or 12}:{t:%M %p}"
+
+
+def _page(request, user, error=None, open_form=None):
+    """open_form: "cooked" or "other", the form whose optional fields start open (the one that errored)."""
+    uid, d = user["mealie_user_id"], local_today()
     con = db.connect()
     try:
         entries = con.execute(
             "SELECT e.*, p.id AS photo_id FROM entries e LEFT JOIN photos p ON p.entry_id = e.id "
             "WHERE e.user_id = ? AND e.day = ? ORDER BY e.id",
-            (user["mealie_user_id"], day),
+            (uid, d.isoformat()),
         ).fetchall()
-        w = con.execute(
-            "SELECT lbs FROM weights WHERE user_id = ? AND date = ?", (user["mealie_user_id"], day)
-        ).fetchone()
+        w = con.execute("SELECT lbs FROM weights WHERE user_id = ? AND date = ?", (uid, d.isoformat())).fetchone()
+        meal_days = con.execute(
+            "SELECT day FROM entries WHERE user_id = ? AND kind IN ('cooked', 'leftovers')", (uid,)
+        ).fetchall()
     finally:
         con.close()
+    cal = sum(e["calories"] or 0 for e in entries)
+    target, goal = user["cal_target"], user["weekly_goal"]
+    week = stats.week_totals([date.fromisoformat(r["day"]) for r in meal_days], d)[-1]
     ctx = {
-        "entries": entries,
-        "cal": sum(e["calories"] or 0 for e in entries),
+        "entries": [dict(e, time_label=_time_label(e["created_at"])) for e in entries],
+        "cal": cal,
         "protein": round(sum(e["protein_g"] or 0 for e in entries)),
+        "cal_pct": min(100, max(0, round(cal * 100 / target))) if target else None,
+        "cal_left": max(0, target - cal) if target else None,
+        "cal_over": max(0, cal - target) if target else None,
+        "week_count": week,
+        "week_extra": max(0, week - goal),
+        "date_label": f"{d:%A} {d.day} {d:%b}",
         "user": user,
         "weight": w["lbs"] if w else None,
         "error": error,
+        "open_form": open_form,
     }
     return auth.templates.TemplateResponse(request, "today.html", ctx)
 
@@ -83,19 +104,20 @@ def add_entry(
 ):
     if kind not in ("cooked", "leftovers", "other"):
         return _page(request, user, "Pick a kind of entry")
+    form = "other" if kind == "other" else "cooked"
     if kind != "other" and leftovers:
         kind = "leftovers"
     description = description.strip()
     try:
         cal, prot = _num(calories, "Calories"), _num(protein_g, "Protein")
     except ValueError as e:
-        return _page(request, user, str(e))
+        return _page(request, user, str(e), form)
     name = None
     if recipe_id and kind != "other":
         try:
             r = mealie.recipe(user["mealie_token"], recipe_id)
         except mealie.MealieNotFound:
-            return _page(request, user, "That recipe no longer exists")
+            return _page(request, user, "That recipe no longer exists", form)
         recipe_id, name = r["id"], r["name"]  # Mealie's canonical id, not the posted string
         nutrition = r.get("nutrition") or {}
         if cal is None:
@@ -105,7 +127,7 @@ def add_entry(
     else:
         recipe_id = None
         if not description:
-            return _page(request, user, "Add a description or pick a recipe" if kind != "other" else "Add a description")
+            return _page(request, user, "Add a description or pick a recipe" if kind != "other" else "Add a description", form)
 
     now = _now().isoformat()
     con = db.connect()
@@ -131,7 +153,7 @@ def add_entry(
         con.commit()
     finally:
         con.close()
-    return _page(request, user, error) if error else RedirectResponse("/", 303)
+    return _page(request, user, error, "cooked") if error else RedirectResponse("/", 303)  # the photo field is in "I cooked"
 
 
 @router.post("/entries/{entry_id}/delete")

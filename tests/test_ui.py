@@ -61,5 +61,16 @@ def test_public_csp(mock_mealie):
     assert "content-security-policy" not in c.get("/login").headers
 
 
+def test_long_text_classes(client):
+    word = "w" * 60
+    client.post("/entries", data={"kind": "other", "description": word})
+    html = client.get("/").text
+    i = html.index(word)
+    start = html.rindex('<div class="entry-text">', 0, i)
+    assert "</div>" not in html[start:i]
+    css = (Path(__file__).parent.parent / "app" / "static" / "app.css").read_text()
+    assert re.search(r"\.entry-text\s*\{[^}]*overflow-wrap:\s*anywhere", css)
+
+
 def test_no_second_footer_bar(client):
     assert 'class="links"' not in client.get("/").text

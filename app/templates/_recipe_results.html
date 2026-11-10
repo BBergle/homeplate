@@ -1,3 +1,3 @@
 {% for r in recipes %}
-<label class="choice"><input type="radio" name="recipe_id" value="{{ r.id }}"> {{ r.name }}</label>
+<label class="check"><input type="radio" name="recipe_id" value="{{ r.id }}"> {{ r.name }}</label>
 {% else %}<p class="muted">No recipes found.</p>{% endfor %}

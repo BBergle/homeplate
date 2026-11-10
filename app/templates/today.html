@@ -1,45 +1,120 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block content %}
-<h1>Today</h1>
-{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-<p class="card totals">
-  {{ cal }}{% if user["cal_target"] %} / {{ user["cal_target"] }}{% endif %} kcal &middot;
-  {{ protein }}{% if user["protein_target"] %} / {{ user["protein_target"] }}{% endif %} g protein
-</p>
+{% set cal_target, protein_target, goal = user["cal_target"], user["protein_target"], user["weekly_goal"] %}
+<header class="page-head"><h1>Today</h1><p class="muted">{{ date_label }}</p></header>
+{% if error %}<p class="msg msg-error" role="alert">{{ error }}</p>{% endif %}
 
-<ul class="entries">{% for e in entries %}{% include "_entry.html" %}{% else %}<li class="muted">Nothing logged yet.</li>{% endfor %}</ul>
-
-<section class="card">
-<h2>I cooked</h2>
-<input type="search" name="q" placeholder="Search recipes" autocomplete="off"
-       hx-get="/recipes/search" hx-trigger="load, input changed delay:300ms" hx-target="#recipes">
-<form method="post" action="/entries" enctype="multipart/form-data">
-  <input type="hidden" name="kind" value="cooked">
-  <div id="recipes"></div>
-  <label>Photo <input type="file" name="photo" accept="image/*"></label>
-  <label class="check"><input type="checkbox" name="show_photo" value="on" checked> Show on recipe page</label>
-  <label class="check"><input type="checkbox" name="leftovers" value="on"> Leftovers</label>
-  <label>Note (needed if no recipe) <input type="text" name="description"></label>
-  <label>Calories <input type="number" name="calories" min="0" step="any" inputmode="numeric"></label>
-  <label>Protein (g) <input type="number" name="protein_g" min="0" step="any" inputmode="numeric"></label>
-  <button type="submit">Log meal</button>
-</form>
+<section class="card hero" aria-label="Today's totals">
+  <div class="hero-main">
+    {% if cal_pct is not none %}
+    <div class="ring-box">
+      <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="{{ '{:,}'.format(cal) }} of {{ '{:,}'.format(cal_target) }} calories">
+        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--surface-2)" stroke-width="12"/>
+        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="12" stroke-linecap="round"
+                pathLength="100" stroke-dasharray="{{ cal_pct }} 100" transform="rotate(-90 60 60)"/>
+      </svg>
+      <p class="ring-label" aria-hidden="true"><span class="num ring-num">{{ '{:,}'.format(cal) }}</span><span class="muted">kcal</span></p>
+    </div>
+    {% endif %}
+    <div class="hero-text">
+      {% if cal_pct is not none %}
+      <p class="cal-remaining num">{% if cal_over %}{{ '{:,}'.format(cal_over) }} over{% else %}{{ '{:,}'.format(cal_left) }} left{% endif %}</p>
+      <p class="muted">of {{ '{:,}'.format(cal_target) }} kcal</p>
+      {% else %}
+      <p class="cal-total"><span class="num">{{ '{:,}'.format(cal) }}</span> <span class="muted">kcal</span></p>
+      {% endif %}
+      <div class="protein">
+        {% if protein_target %}
+        <progress value="{{ protein }}" max="{{ protein_target }}" aria-labelledby="protein-text"></progress>
+        <p id="protein-text" class="num">{{ '{:,}'.format(protein) }} of {{ '{:,}'.format(protein_target) }} g protein</p>
+        {% else %}
+        <p class="num">{{ '{:,}'.format(protein) }} g protein</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <a class="week" href="/me">
+    <span class="week-text">
+      <span class="week-title">Cooked this week</span>
+      <span class="dots" aria-hidden="true">
+        {%- for i in range(goal) %}<span class="dot{{ ' on' if i < week_count }}"></span>{% endfor -%}
+        {%- if week_extra %}<span class="week-extra">+{{ week_extra }}</span>{% endif -%}
+      </span>
+    </span>
+    <span class="num week-count">{{ week_count }} of {{ goal }}</span>
+    {{ icon("chevron") }}
+  </a>
 </section>
 
-<form class="card" method="post" action="/entries">
-  <h2>Add food</h2>
-  <input type="hidden" name="kind" value="other">
-  <label>Description <input type="text" name="description" required></label>
-  <label>Calories <input type="number" name="calories" min="0" step="any" inputmode="numeric"></label>
-  <label>Protein (g) <input type="number" name="protein_g" min="0" step="any" inputmode="numeric"></label>
-  <button type="submit">Add</button>
+<section class="card cook">
+  <h2>I cooked</h2>
+  <label class="field">Recipe
+    <input type="search" name="q" placeholder="Search recipes" autocomplete="off" enterkeyhint="search"
+           hx-get="/recipes/search" hx-trigger="load, input changed delay:300ms" hx-target="#recipes">
+  </label>
+  <form method="post" action="/entries" enctype="multipart/form-data">
+    <input type="hidden" name="kind" value="cooked">
+    <div id="recipes" class="recipes"></div>
+    <details class="more"{% if open_form == "cooked" %} open{% endif %}>
+      <summary>Photo, note and nutrition {{ icon("chevron") }}</summary>
+      <label class="field">Photo <input type="file" name="photo" accept="image/*"></label>
+      <label class="check"><input type="checkbox" name="show_photo" value="on" checked>
+        <span>Share this photo on the recipe page <small class="muted">Shown with the recipe and on its share link. Without a recipe it stays private.</small></span></label>
+      <label class="check"><input type="checkbox" name="leftovers" value="on"> Leftovers</label>
+      <label class="field">Note (needed if no recipe) <input type="text" name="description" enterkeyhint="next"></label>
+      <div class="pair">
+        <label class="field">Calories <input type="number" name="calories" min="0" step="1" inputmode="numeric" enterkeyhint="next" autocomplete="off"></label>
+        <label class="field">Protein (g) <input type="number" name="protein_g" min="0" step="any" inputmode="decimal" enterkeyhint="done" autocomplete="off"></label>
+      </div>
+    </details>
+    <button type="submit">Log meal</button>
+  </form>
+</section>
+
+{% if entries %}
+<section class="card">
+  <h2>Logged today</h2>
+  <ul class="list entries">{% for e in entries %}{% include "_entry.html" %}{% endfor %}</ul>
+</section>
+{% else %}
+<section class="card empty">
+  {{ icon("plate") }}
+  <h2>Nothing logged yet</h2>
+  <p class="muted">Log what you cooked and it will show up here.</p>
+</section>
+{% endif %}
+
+<details class="card more add-food"{% if open_form == "other" %} open{% endif %}>
+  <summary><h2>Add food</h2> {{ icon("chevron") }}</summary>
+  <form method="post" action="/entries">
+    <input type="hidden" name="kind" value="other">
+    <label class="field">Description <input type="text" name="description" required enterkeyhint="next"></label>
+    <div class="pair">
+      <label class="field">Calories <input type="number" name="calories" min="0" step="1" inputmode="numeric" enterkeyhint="next" autocomplete="off"></label>
+      <label class="field">Protein (g) <input type="number" name="protein_g" min="0" step="any" inputmode="decimal" enterkeyhint="done" autocomplete="off"></label>
+    </div>
+    <button type="submit">Add</button>
+  </form>
+</details>
+
+<form class="card weight" method="post" action="/weight">
+  <h2>Weight</h2>
+  <div class="inline-form">
+    <label class="field">Pounds <input type="number" name="lbs" min="50" max="1000" step="0.1" inputmode="decimal" enterkeyhint="done" required
+           {% if weight is not none %}value="{{ weight }}"{% endif %}></label>
+    <button type="submit">Save</button>
+  </div>
 </form>
 
-<form class="card" method="post" action="/weight">
-  <h2>Weight</h2>
-  <label>Pounds <input type="number" name="lbs" min="50" max="1000" step="0.1" inputmode="decimal" required
-         {% if weight is not none %}value="{{ weight }}"{% endif %}></label>
-  <button type="submit">Save weight</button>
-</form>
-{% if mealie_url %}<p class="muted">Mealie: <a href="{{ mealie_url }}">Recipes</a> &middot; <a href="{{ mealie_url }}">Plan</a> &middot; <a href="{{ mealie_url }}">List</a></p>{% endif %}
+{% if mealie_url %}
+<section class="card kitchen">
+  <h2>Kitchen</h2>
+  <ul class="list">
+    {%- for label in ("Recipes", "Meal plan", "Shopping list") %}
+    <li><a href="{{ mealie_url }}">{{ label }} {{ icon("chevron") }}</a></li>
+    {%- endfor %}
+  </ul>
+</section>
+{% endif %}
 {% endblock %}

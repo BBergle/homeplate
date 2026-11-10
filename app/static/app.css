@@ -119,7 +119,7 @@ input:not([type=checkbox], [type=radio]), select, textarea {
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm);
 }
 input[type=checkbox], input[type=radio] { flex: none; width: 24px; height: 24px; margin: 0; accent-color: var(--accent); }
-:is(.check, .choice, label:has(> [type=checkbox], > [type=radio])) { display: flex; align-items: center; gap: var(--s-3); min-height: 48px; margin: 0; font-size: var(--t-body); font-weight: 400; }
+:is(.check, label:has(> [type=checkbox], > [type=radio])) { display: flex; align-items: center; gap: var(--s-3); min-height: 48px; margin: 0; font-size: var(--t-body); font-weight: 400; }
 
 /* Messages: an icon-like marker, not colour alone. Errors get "!"; success messages carry {{ icon("check") }}. */
 .msg, .error {
@@ -200,15 +200,91 @@ input[type=checkbox], input[type=radio] { flex: none; width: 24px; height: 24px;
 main.public { padding-bottom: calc(var(--s-6) + env(safe-area-inset-bottom, 0px)); }
 .public footer { margin-top: var(--s-6); font-size: var(--t-small); text-align: center; }
 
+/* ---------- Today ---------- */
+.hero-main { display: flex; align-items: center; gap: var(--s-4); }
+.ring-box { position: relative; flex: none; width: 144px; height: 144px; } /* inner circle fits a 5-digit total */
+.ring { display: block; width: 100%; height: 100%; }
+/* the ring's stroke attributes use var(); repeated here for engines that ignore var() in SVG attributes */
+.ring circle { stroke: var(--surface-2); }
+.ring circle + circle { stroke: var(--accent); }
+.ring-label {
+  position: absolute; inset: 0; margin: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.ring-num { font: 700 var(--t-h1)/1.05 var(--font-num); }
+.ring-label .muted { font-size: var(--t-caption); font-weight: 600; line-height: 1.2; }
+.hero-text { flex: 1; min-width: 0; }
+.hero-text p { margin: 0; }
+.cal-remaining { font: 650 var(--t-h2)/1.25 var(--font-num); }
+.cal-total .num { font: 700 var(--t-display)/1.05 var(--font-num); }
+.hero-text .muted, .protein p { font-size: var(--t-small); line-height: 1.35; }
+.protein { margin-top: var(--s-4); }
+progress {
+  display: block; width: 100%; height: var(--s-2); margin: 0 0 var(--s-2);
+  appearance: none; border: 0; border-radius: var(--r-pill); overflow: hidden;
+  background: var(--surface-2); color: var(--accent); accent-color: var(--accent);
+}
+progress::-webkit-progress-bar { background: var(--surface-2); }
+progress::-webkit-progress-value { background: var(--accent); border-radius: var(--r-pill); }
+progress::-moz-progress-bar { background: var(--accent); border-radius: var(--r-pill); }
+
+.week {
+  display: flex; align-items: center; gap: var(--s-3); min-height: 48px;
+  margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--line);
+  color: var(--text); text-decoration: none;
+}
+.week-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.week-title { font-size: var(--t-small); font-weight: 600; line-height: 1.35; }
+.dots { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+/* filled = cooked, outlined = still to go: shape, not colour alone */
+.dot { width: var(--s-3); height: var(--s-3); border: 2px solid var(--accent); border-radius: var(--r-pill); }
+.dot.on { background: var(--accent); }
+.week-extra { font-size: var(--t-small); font-weight: 600; line-height: 1; color: var(--accent); }
+.week-count { font-weight: 600; }
+:is(.week, .kitchen) .icon-chevron { transform: rotate(-90deg); color: var(--muted); }
+
+.recipes { max-height: 240px; overflow-y: auto; }
+.recipes > .check + .check { border-top: 1px solid var(--line); }
+.recipes > p { margin: 0 0 var(--s-3); }
+.cook .more { margin: 0 0 var(--s-4); border-block: 1px solid var(--line); }
+.cook .more[open] > summary { margin-bottom: var(--s-2); }
+.check small { display: block; font-size: var(--t-small); line-height: 1.35; }
+.check:has(small) { align-items: flex-start; padding: var(--s-3) 0; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.list > li + li { border-top: 1px solid var(--line); }
+.entry { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) 0; }
+.entry:first-child { padding-top: 0; }
+.entry:last-child { padding-bottom: 0; }
+.entry-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.entry-text p { margin: 0; }
+.entry-name { font-weight: 600; line-height: 1.3; }
+.entry-note, .entry-meta { font-size: var(--t-small); line-height: 1.35; }
+.entry-meta { margin-top: var(--s-1); }
+.entry-meta .num { white-space: nowrap; }
+.entry-more { position: relative; flex: none; }
+.entry-more > summary { justify-content: center; color: var(--muted); }
+/* Remove floats under the "more" button, over the next row */
+.entry-more > form { position: absolute; top: 100%; right: 0; z-index: 1; margin: 0; }
+.entry-more > form > button { width: auto; white-space: nowrap; background: var(--surface); box-shadow: var(--shadow-1); }
+
+.card.more { padding: 0; }
+.card.more > summary { padding: var(--s-4); }
+.card.more > summary h2 { margin: 0; }
+.card.more > form { padding: 0 var(--s-4) var(--s-4); }
+
+.inline-form { display: flex; align-items: flex-end; gap: var(--s-3); }
+.inline-form .field { flex: 1; min-width: 0; margin: 0; }
+
+.kitchen a { display: flex; align-items: center; min-height: 48px; font-weight: 600; text-decoration: none; }
+.kitchen .icon-chevron { margin-left: auto; }
+
 /* ---------- Legacy ----------
-   Classes the Today, Me, gallery, share, join and invite pages still use until their tasks restyle them.
-   Also aliased above: .error (= .msg .msg-error), button.danger (= .btn-danger), .choice (= .check). */
-ul.entries, ul.plain { list-style: none; margin: 0; padding: 0; }
-.entry { display: flex; align-items: center; gap: var(--s-3); }
-.entry .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.entry form { margin: 0; }
-.entry form > button, .gallery form > button { width: auto; }
-#recipes { max-height: 220px; overflow-y: auto; margin-bottom: var(--s-3); }
+   Classes the Me, gallery, share, join and invite pages still use until their tasks restyle them.
+   Also aliased above: .error (= .msg .msg-error), button.danger (= .btn-danger). */
+ul.plain { list-style: none; margin: 0; padding: 0; }
+.gallery form > button { width: auto; }
 .big { font: 700 var(--t-h1)/1.15 var(--font-num); margin: 0 0 var(--s-1); }
 ul.plain li { min-height: 44px; display: flex; align-items: center; gap: var(--s-2); }
 li.locked { color: var(--muted); }
