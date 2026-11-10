@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app import asktools, webimg
+from app import asktools, mealie, webimg
 
 SEARCH = ("GET", "/api/recipes")
 SCRAPE = ("POST", "/api/recipes/test-scrape-url")
@@ -63,6 +63,29 @@ def test_recipe_cards(mock_mealie):
     assert cards[0]["image"] == "https://img.example/p.jpg"
     assert (cards[1]["name"], cards[1]["importable"], cards[1]["image"]) == ("Mine", False, None)
     assert (cards[2]["name"], cards[2]["importable"]) == ("Empty", False)
+
+
+def _raise(out):
+    if isinstance(out, Exception):
+        raise out
+    return out
+
+
+def _two(mock_mealie, second):
+    mock_mealie[SCRAPE] = lambda r: httpx.Response(200, json={"name": "Good", "recipeIngredient": ["a"]}) if "good" in r.content.decode() else _raise(second)
+    recipes = [{"name": "G", "url": "https://good.example/r", "why": "w"}, {"name": "Bad", "url": "https://bad.example/r", "why": "w"}]
+    return asktools.recipe_cards({"intro": "i", "recipes": recipes}, "t")[1]
+
+
+@pytest.mark.parametrize("second", [httpx.Response(500, json={}), httpx.ReadTimeout("slow"), httpx.Response(404, json={})])
+def test_recipe_cards_one_bad_page_keeps_the_rest(mock_mealie, second):
+    cards = _two(mock_mealie, second)
+    assert [(c["name"], c["importable"]) for c in cards] == [("Good", True), ("Bad", False)]
+
+
+def test_recipe_cards_mealie_down_raises(mock_mealie):
+    with pytest.raises(mealie.MealieError):
+        _two(mock_mealie, httpx.ConnectError("down"))
 
 
 @pytest.mark.parametrize("args", [{}, {"recipes": "x"}, {"recipes": ["a", 1, None]}])

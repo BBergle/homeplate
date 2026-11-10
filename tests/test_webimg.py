@@ -147,3 +147,29 @@ def test_thumbnail_gives_up_after_the_deadline(net, monkeypatch):
     ticks = iter(range(0, 1000, 10))  # each clock read is 10 s later
     monkeypatch.setattr(webimg, "time", type("T", (), {"monotonic": staticmethod(lambda: next(ticks))}))
     assert webimg.thumbnail("https://site.example/a") is None
+
+
+def _fetch(net, body):
+    net[1]["handler"] = lambda r: httpx.Response(200, content=body)
+    return webimg.thumbnail("https://site.example/a")
+
+
+def test_thumbnail_pixel_limit(net):
+    assert _fetch(net, png((5000, 4000))) is None
+    img = Image.open(io.BytesIO(_fetch(net, png((4000, 3000)))))
+    assert img.format == "JPEG" and max(img.size) == 640
+
+
+def test_thumbnail_refuses_decompression_bomb_and_other_formats(net):
+    assert _fetch(net, png((8000, 8000))) is None  # a few KB of PNG, 64 million pixels; the same refusal as the MAX_PIXELS test
+    b = io.BytesIO()
+    Image.new("RGB", (10, 10)).save(b, "BMP")
+    assert _fetch(net, b.getvalue()) is None
+
+
+def test_thumbnail_drops_source_metadata(net):
+    b = io.BytesIO()
+    Image.new("RGB", (50, 50)).save(b, "JPEG", comment=b"<script>x</script>")
+    assert b"<script>" in b.getvalue()
+    out = _fetch(net, b.getvalue())
+    assert out and b"<script>" not in out

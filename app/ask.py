@@ -56,6 +56,13 @@ def _conversation(uid: str) -> list[dict]:
     return [dict(r) | {"sources": json.loads(r["sources"] or "[]"), "cards": [c for c in cards if c["message_id"] == r["id"]]} for r in out]
 
 
+def _shown(cards: list[dict]) -> str:
+    """The note telling the model what was shown as cards under an answer."""
+    if not cards:
+        return ""
+    return "\n[Shown as cards: " + "; ".join(f"{n}. {c['name']} ({c['url']})" for n, c in enumerate(cards, 1)) + "]"
+
+
 def _fragment(request, uid):
     msgs = _conversation(uid)
     waiting = any(m["content"] is None for m in msgs)
@@ -106,6 +113,7 @@ def _answer(row_id: int, uid: str, key: str, model: str, token: str, messages: l
         text, sources, error, cards = FAILED, None, 1, []
     ids = []
     con = db.connect()
+    # ponytail: photo files of expired cards are only removed by New chat; add a sweep if the cards folder grows
     try:  # one short transaction: no network happens while it is open
         for c, jpg in zip(cards, photos):
             payload = {k: v for k, v in c.items() if k != "image"} | {"photo": bool(jpg)}
@@ -137,20 +145,6 @@ def _write_photo(pid: int, jpg: bytes) -> bool:
         except OSError:
             pass
         return False
-
-
-def _shown(uid: str) -> dict[int, str]:
-    """For each answer row that has cards: the note telling the model what was shown."""
-    con = db.connect()
-    try:
-        rows = con.execute("SELECT message_id, payload FROM proposals WHERE user_id = ? ORDER BY id", (uid,)).fetchall()
-    finally:
-        con.close()
-    names: dict[int, list[str]] = {}
-    for r in rows:
-        p = json.loads(r["payload"])
-        names.setdefault(r["message_id"], []).append(f"{len(names.get(r['message_id'], [])) + 1}. {p['name']} ({p['url']})")
-    return {k: "\n[Shown as cards: " + "; ".join(v) + "]" for k, v in names.items()}
 
 
 @router.get("/ask")
@@ -192,8 +186,7 @@ def ask_send(request: Request, tasks: BackgroundTasks, message: str = Form(""), 
         finally:
             con.close()
         if row_id is not None:
-            shown = _shown(uid)
-            sent = [{"role": m["role"], "content": m["content"] + shown.get(m["id"], "")} for m in history if m["content"] is not None and not m["error"]]
+            sent = [{"role": m["role"], "content": m["content"] + _shown(m["cards"])} for m in history if m["content"] is not None and not m["error"]]
             sent = (sent + [{"role": "user", "content": message}])[-HISTORY:]
             system = {"role": "system", "content": SYSTEM.format(date=today.local_today().strftime("%A, %B %-d, %Y"))}
             tasks.add_task(_answer, row_id, uid, key, user["ai_model"] or ai.DEFAULT_MODEL, user["mealie_token"], [system, *sent])
@@ -236,14 +229,10 @@ def card_add(request: Request, card_id: int, user=Depends(auth.current_user)):
         row = _own_card(con, card_id, uid)
         cutoff = (_now() - timedelta(hours=EXPIRE_HOURS)).isoformat()
         claimed = con.execute(
-            "UPDATE proposals SET status = 'working' WHERE id = ? AND user_id = ? AND status = 'open' AND created_at > ?", (card_id, uid, cutoff)
+            "UPDATE proposals SET status = 'working' WHERE id = ? AND user_id = ? AND status = 'open' AND created_at > ? AND json_extract(payload, '$.importable')", (card_id, uid, cutoff)
         ).rowcount
         con.commit()
         card = _card(row)
-        if claimed and not card["importable"]:
-            con.execute("UPDATE proposals SET status = 'open' WHERE id = ?", (card_id,))
-            con.commit()
-            claimed = 0
     finally:
         con.close()
     if claimed:

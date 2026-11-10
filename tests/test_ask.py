@@ -437,9 +437,9 @@ def test_photo_write_failure_clears_photo_flag(ai_client, mock_ai, scrape_ok, fa
     assert rows()[-1]["content"] == "Here are two." and json.loads(a["payload"])["photo"] is False
 
 
-@pytest.mark.parametrize("status", [500, 401])
-def test_mealie_down_while_building_cards(ai_client, mock_ai, mock_mealie, fake_web, status):
-    mock_mealie[("POST", "/api/recipes/test-scrape-url")] = httpx.Response(status, json={})
+@pytest.mark.parametrize("out", [httpx.ConnectError("down"), httpx.Response(401, json={})])
+def test_mealie_down_while_building_cards(ai_client, mock_ai, mock_mealie, fake_web, out):
+    mock_mealie[("POST", "/api/recipes/test-scrape-url")] = out
     sequence(mock_ai, PROPOSE)
     ai_client.post("/ask", data={"message": "find"}, headers=HX)
     last = rows()[-1]
@@ -514,6 +514,7 @@ def test_cards_render_under_their_answer(ai_client):
     html = ai_client.get("/ask/chat").text
     assert "Soup" in html and "r.example" in html and "Easy." in html
     assert f'hx-post="/ask/cards/{a}"' in html and f'hx-target="#rcard-{a}"' in html and 'hx-swap="outerHTML"' in html and ">Add</button>" in html
+    assert 'hx-disabled-elt="find button"' in html
     assert '<a class="rcard-link" href="https://r.example/soup" target="_blank" rel="noopener noreferrer">Open page</a>' in html
     assert f'<img class="rcard-photo" src="/ask/cards/{a}/photo" alt="" loading="lazy">' in html
     add_card(importable=False)
@@ -580,8 +581,15 @@ def test_add_expired_or_not_importable(ai_client, imports):
     for cid in (a, b):
         r = ai_client.post(f"/ask/cards/{cid}", headers=HX)
         assert r.status_code == 200 and card_row(cid)["status"] == "open"
-    assert imports == []
+    assert imports == []  # the mock records every import call: none was made
     assert "Expired, ask again." in ai_client.post(f"/ask/cards/{a}", headers=HX).text
+
+
+def test_add_session_expired(ai_client, mock_mealie):
+    mock_mealie[("POST", "/api/recipes/create/url")] = httpx.Response(401, json={})
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX, follow_redirects=False)
+    assert card_row(a)["status"] == "open" and r.status_code in (303, 200) and "/login" in (r.headers.get("location", "") + r.headers.get("hx-redirect", ""))
 
 
 def test_other_persons_card(ai_client, login_as, imports):

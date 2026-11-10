@@ -1,6 +1,8 @@
 import os
 from urllib.parse import urlsplit
 
+import httpx
+
 from app import mealie, webimg
 
 DOWN = {"error": "the recipe library could not be reached"}
@@ -77,7 +79,12 @@ def recipe_cards(args: dict, token: str) -> tuple[str, list[dict]]:
             continue
         seen.add(url)
         # ponytail: pages are scraped one after another; parallelise if five cards feel slow
-        scrape = mealie.test_scrape(token, url)
+        try:
+            scrape = mealie.test_scrape(token, url)
+        except mealie.MealieError as e:
+            if isinstance(e.__cause__, httpx.ConnectError):
+                raise  # Mealie itself is down
+            scrape = None  # this page only: a card without Add
         host = (urlsplit(url).hostname or "").removeprefix("www.")
         scraped, given = (scrape or {}).get("name"), item.get("name")
         name = next((n.strip() for n in (scraped, given) if isinstance(n, str) and n.strip()), host)

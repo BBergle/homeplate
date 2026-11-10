@@ -27,6 +27,15 @@ def test_test_scrape_missing_fields(mock_mealie):
     assert mealie.test_scrape("t", U) == {"name": None, "image": None, "ingredients": 0}
 
 
+def test_test_scrape_auth_and_server_errors(mock_mealie):
+    mock_mealie[SCRAPE] = httpx.Response(401, json={})
+    with pytest.raises(mealie.MealieAuthError):
+        mealie.test_scrape("t", U)
+    mock_mealie[SCRAPE] = httpx.Response(500, json={})
+    with pytest.raises(mealie.MealieError):
+        mealie.test_scrape("t", U)
+
+
 def test_test_scrape_refused_or_odd(mock_mealie):
     mock_mealie[SCRAPE] = httpx.Response(400, json={"detail": {"message": "BAD_RECIPE_DATA"}})
     assert mealie.test_scrape("t", U) is None

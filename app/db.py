@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS proposals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
     message_id INTEGER NOT NULL,          -- the chat_messages answer row it hangs under
-    kind TEXT NOT NULL CHECK (kind IN ('recipe')),
+    kind TEXT NOT NULL,
     payload TEXT NOT NULL,                -- JSON: name, url, host, why, importable (bool), photo (bool)
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'working', 'done', 'failed')),
     result TEXT,                          -- done: the new recipe's slug; failed: the sentence shown

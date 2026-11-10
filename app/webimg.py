@@ -11,6 +11,7 @@ from PIL import Image
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_REDIRECTS = 3
+MAX_PIXELS = 16_000_000  # checked here, Pillow's global setting is left alone
 DEADLINE = 15  # seconds for the whole thumbnail call, all hops
 _V6_PUBLIC = ipaddress.ip_network("2000::/3")  # excludes mapped, NAT64, site-local, link-local, ULA
 Image.MAX_IMAGE_PIXELS = 50_000_000
@@ -81,8 +82,12 @@ def thumbnail(url: str) -> bytes | None:
                             return None
             with warnings.catch_warnings():
                 warnings.simplefilter("error", Image.DecompressionBombWarning)
-                img = Image.open(io.BytesIO(data), formats=["JPEG", "PNG", "WEBP", "GIF"]).convert("RGB")
-            img.thumbnail((640, 640))
+                img = Image.open(io.BytesIO(data), formats=["JPEG", "PNG", "WEBP", "GIF"])
+                if img.size[0] * img.size[1] > MAX_PIXELS:
+                    return None
+                img.thumbnail((640, 640))  # before convert: JPEGs then decode at reduced size
+                img = img.convert("RGB")
+            img.info.clear()  # nothing from the source file (comments, EXIF) is served from here
             out = io.BytesIO()
             img.save(out, "JPEG", quality=80)
             return out.getvalue()
