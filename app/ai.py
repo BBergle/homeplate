@@ -110,7 +110,8 @@ def chat(key: str, model: str, messages: list[dict]) -> dict:
     except (KeyError, IndexError, TypeError) as e:
         raise AIError(_DOWN) from e
     text = re.sub(r"\s*\(\[[^\]]*\]\([^)]*\)\)", "", content or "")
-    text = re.sub(r"\[([^\]]*)\]\(http[^)]*\)", r"\1", text).strip()
+    text = re.sub(r"\[([^\]]*)\]\(http[^)]*\)", r"\1", text)
+    text = re.sub(r"\s*\(https?://[^)\s]*\)", "", text).strip()  # bare "(https://...)" the model adds despite the prompt
     if not text:
         if choice.get("finish_reason") == "length":
             raise AIError("The answer was cut off. Ask again, or ask for something shorter.")

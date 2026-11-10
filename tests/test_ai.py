@@ -41,6 +41,11 @@ def test_chat_request_and_result(mock_ai):
                             "tools": [{"type": "openrouter:web_search", "parameters": {"engine": "parallel", "mode": "turbo", "max_results": 5}}]}
 
 
+def test_chat_drops_bare_urls_in_parentheses(mock_ai):
+    mock_ai[CHAT] = reply("Sources\n- King Arthur (https://k.com/r?x=1)\n- Other (https://o.com/)")
+    assert ai.chat("k", "m", [])["text"] == "Sources\n- King Arthur\n- Other"
+
+
 def test_chat_cleans_text_and_sources(mock_ai):
     mock_ai[CHAT] = reply(
         "Try this ([k.com](https://k.com/r?utm_source=openai)). See [King Arthur](https://k.com/r).",
