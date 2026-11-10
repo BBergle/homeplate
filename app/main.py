@@ -92,6 +92,9 @@ async def public_headers(request: Request, call_next):
         resp.headers["X-Robots-Tag"] = "noindex"
         # /join/ has a form: no-referrer would make browsers send `Origin: null`, which SameOrigin blocks
         resp.headers["Referrer-Policy"] = "same-origin" if request.url.path.startswith("/join/") else "no-referrer"
+        resp.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+        )
     return resp
 
 
@@ -104,7 +107,7 @@ def mealie_auth_error(request: Request, exc):
 @app.exception_handler(mealie.MealieError)
 def mealie_error(request: Request, exc):
     if request.headers.get("HX-Request"):
-        return HTMLResponse('<p class="error" role="alert">Can\'t reach Mealie</p>')
+        return HTMLResponse('<p class="msg msg-error" role="alert">Can\'t reach Mealie</p>')
     page = "public_error.html" if request.url.path.startswith(("/s/", "/join/")) else "error.html"
     return auth.templates.TemplateResponse(request, page, {}, status_code=502)
 

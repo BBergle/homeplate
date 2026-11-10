@@ -1,21 +1,28 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block content %}
-<h1>Invite someone</h1>
+<header class="page-head"><h1>Invite someone</h1></header>
 {% if not may %}
-<p>Ask the person who runs this server to invite people.</p>
+<section class="card empty">
+  {{ icon("lock") }}
+  <h2>Invites aren't available</h2>
+  <p>Ask the person who runs this server to invite people.</p>
+</section>
 {% elif link %}
-<div class="card">
-  <p>Send this link. It works once.</p>
-  <p><a href="{{ link }}">{{ link }}</a></p>
-</div>
+<section class="card">
+  <p class="msg msg-ok">{{ icon("check") }}<span>Invite ready. It works once.</span></p>
+  <label class="field">Invite link <input type="text" readonly value="{{ link }}" autocomplete="off"></label>
+  <p class="invite-link"><a href="{{ link }}">{{ link }}</a></p>
+</section>
 {% else %}
 <form method="post" action="/invite" class="card">
-  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-  <label><input type="radio" name="where" value="mine" checked> My household</label>
-  {% if admin %}
-  <label><input type="radio" name="where" value="new"> Their own household</label>
-  <label>Household name <input name="household_name" maxlength="50"></label>
-  {% endif %}
+  {% if error %}<p class="msg msg-error" role="alert">{{ error }}</p>{% endif %}
+  <fieldset>
+    <legend>Add them to</legend>
+    <label><input type="radio" name="where" value="mine" checked> My household</label>
+    {% if admin %}<label><input type="radio" name="where" value="new"> Their own household</label>{% endif %}
+  </fieldset>
+  {% if admin %}<label>Household name <input name="household_name" maxlength="50"></label>{% endif %}
   <button>Create invite link</button>
 </form>
 {% endif %}

@@ -1,5 +1,9 @@
 {% extends "public.html" %}
+{% from "_icons.html" import icon %}
 {% block content %}
-<h1>Can't reach Mealie</h1>
-<p>Try again in a moment.</p>
+<section class="card empty">
+  {{ icon("plate") }}
+  <h1>Can't reach Mealie</h1>
+  <p class="muted">Try again in a moment.</p>
+</section>
 {% endblock %}

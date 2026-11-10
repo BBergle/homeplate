@@ -1,4 +1,5 @@
 import json
+import re
 
 import httpx
 from fastapi.testclient import TestClient
@@ -60,7 +61,14 @@ def test_new_household_name_rules(login_as, mock_mealie):
     c = as_user(login_as, mock_mealie, admin=True)
     for name in ("", "   ", "x" * 51):
         r = c.post("/invite", data={"where": "new", "household_name": name})
-        assert r.status_code == 200 and 'class="error"' in r.text and "/join/" not in r.text
+        assert r.status_code == 200 and "msg-error" in r.text and "/join/" not in r.text
+
+
+def test_link_in_readonly_field(login_as, mock_mealie):
+    c = as_user(login_as, mock_mealie, admin=True)
+    mock_mealie[INV] = httpx.Response(201, json={"token": "abc123"})
+    t = c.post("/invite", data={"where": "mine"}).text
+    assert re.search(r'<input[^>]*readonly[^>]*value="[^"]*/join/abc123"', t)
 
 
 def test_base_url_used_for_link(login_as, mock_mealie, monkeypatch):
@@ -128,7 +136,7 @@ def test_join_password_rules(mock_mealie):
     ]
     for over in bad:
         r = c.post("/join/tok9", data=FORM | over, follow_redirects=False)
-        assert r.status_code == 200 and 'class="error"' in r.text and "sid" not in c.cookies
+        assert r.status_code == 200 and 'class="msg msg-error"' in r.text and "sid" not in c.cookies
         assert "hunter2hunter2" not in r.text and "different-pass" not in r.text
         assert 'value="fran"' in r.text or over.get("username") is not None
 
@@ -187,3 +195,17 @@ def test_join_length_limits(mock_mealie):
     assert "Password must be 8 to 200 characters." in r.text and long_pw not in r.text
     ok = "e" * 248 + "@x.io"  # 253 chars
     assert c.post("/join/tok9", data=FORM | {"email": ok}, follow_redirects=False).status_code != 200
+
+
+def test_join_layout(mock_mealie):
+    t = TestClient(app).get("/join/tok9").text
+    assert 'class="wordmark"' in t and "Create your account" in t
+    fields = {m.group(1): m.group(0) for m in re.finditer(r'<input[^>]*name="(\w+)"[^>]*>', t)}
+    want = {"name": "name", "email": "email", "username": "username", "password": "new-password", "password_confirm": "new-password"}
+    assert set(fields) == set(want)
+    for n, ac in want.items():
+        assert f'autocomplete="{ac}"' in fields[n] and "enterkeyhint=" in fields[n], n
+        assert "value=" not in fields[n] or n not in ("password", "password_confirm")
+    for n in ("username", "email"):
+        assert 'autocapitalize="none"' in fields[n] and 'spellcheck="false"' in fields[n]
+    assert len(re.findall(r"<button", t)) == 1 and ">Join<" in t

@@ -1,22 +1,45 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block content %}
-<h1>{{ recipe["name"] }}</h1>
-<form method="post" action="/r/{{ recipe['id'] }}/{{ 'unshare' if share_url else 'share' }}">
-  {% if share_url %}<p>Public link: <a href="{{ share_url }}">{{ share_url }}</a></p>{% endif %}
-  <button type="submit">{{ "Stop sharing" if share_url else "Create share link" }}</button>
-</form>
-{% if mealie_url and group %}<p><a href="{{ mealie_url }}/g/{{ group }}/r/{{ recipe['slug'] }}">Open in Mealie</a></p>{% endif %}
+<header class="page-head">
+  <h1>{{ recipe["name"] }}</h1>
+  <p class="muted">{{ photos | length }} photo{{ "" if photos | length == 1 else "s" }}</p>
+</header>
+<section class="card share">
+  <h2>Share</h2>
+  <form method="post" action="/r/{{ recipe['id'] }}/{{ 'unshare' if share_url else 'share' }}">
+    {% if share_url %}
+    <label class="field">Public link <input value="{{ share_url }}" readonly></label>
+    <p class="share-link"><a href="{{ share_url }}">{{ share_url }}</a></p>
+    <button class="btn btn-danger">Stop sharing</button>
+    {% else %}
+    <button class="btn btn-primary">Create share link</button>
+    {% endif %}
+  </form>
+</section>
 {% if photos %}
-<ul class="gallery">{% for p in photos %}
-  <li>
-    <a href="/photos/{{ p['id'] }}"><img src="/photos/{{ p['id'] }}" alt="" loading="lazy"></a>
+<ul class="photo-grid">{% for p in photos %}
+  <li class="shot">
+    <a href="/photos/{{ p['id'] }}"><img src="/photos/{{ p['id'] }}" alt="Photo of {{ recipe['name'] }}" loading="lazy" width="200" height="200"></a>
     {% if p["user_id"] == uid %}
-    <form method="post" action="/photos/{{ p['id'] }}/private">
-      {% if p["private"] %}<span class="muted">Private</span> {% endif %}
-      <button type="submit">{{ "Make public" if p["private"] else "Make private" }}</button>
-    </form>
+    <div class="shot-bar">
+      {% if p["private"] %}<span class="chip">{{ icon("lock") }}Private</span>{% endif %}
+      <details class="more">
+        <summary aria-label="Photo options">{{ icon("more") }}</summary>
+        <form method="post" action="/photos/{{ p['id'] }}/private">
+          <button class="btn btn-secondary">{{ "Make public" if p["private"] else "Make private" }}</button>
+        </form>
+      </details>
+    </div>
     {% endif %}
   </li>{% endfor %}
 </ul>
-{% else %}<p class="muted">No photos yet. Log this recipe with a photo and it will show up here.</p>{% endif %}
+{% else %}
+<section class="card empty">
+  {{ icon("camera") }}
+  <h2>No photos yet</h2>
+  <p class="muted">Log this recipe with a photo on Today and it will show up here.</p>
+</section>
+{% endif %}
+{% if mealie_url and group %}<p class="open-mealie"><a class="btn btn-secondary" href="{{ mealie_url }}/g/{{ group }}/r/{{ recipe['slug'] }}">Open in Mealie</a></p>{% endif %}
 {% endblock %}

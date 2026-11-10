@@ -90,6 +90,8 @@ def page(request: Request, token: str):
         con.close()
     n = r.get("nutrition") or {}
     ctx = {
+        "og_description": (r.get("description") or "")[:200],
+        "og_image": f"{auth.base_url(request)}/s/{token}/image" if r.get("image") else None,
         "recipe": r, "photos": pics, "token": token,
         "calories": mealie.leading_number(n.get("calories")), "protein": mealie.leading_number(n.get("proteinContent")),
     }

@@ -1,0 +1,17 @@
+{# Line icons: 24x24, stroke currentColor. Use: {% from "_icons.html" import icon %} ... {{ icon("plate") }} #}
+{% set paths = {
+  "today": '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+  "me": '<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>',
+  "order": '<path d="M3 10h18l-1.7 8.4a2 2 0 0 1-2 1.6H6.7a2 2 0 0 1-2-1.6L3 10Z"/><path d="m7.5 10 3-6M16.5 10l-3-6M9.5 14v2.5M14.5 14v2.5"/>',
+  "ask": '<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12Z"/>',
+  "plate": '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/>',
+  "check": '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  "lock": '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  "camera": '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.5" r="3.5"/>',
+  "chevron": '<path d="m6 9 6 6 6-6"/>',
+  "plus": '<path d="M12 5v14M5 12h14"/>',
+  "more": '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+} %}
+{% macro icon(name) -%}
+<svg class="icon icon-{{ name }}" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ paths[name]|safe }}</svg>
+{%- endmacro %}

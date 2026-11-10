@@ -1,11 +1,12 @@
 import io
 import os
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from PIL import Image
 
-from app import db, today
+from app import auth, db, today
 
 
 def rows(sql, *args):
@@ -14,6 +15,27 @@ def rows(sql, *args):
         return con.execute(sql, args).fetchall()
     finally:
         con.close()
+
+
+def run(sql, *args):
+    con = db.connect()
+    try:
+        con.execute(sql, args)
+        con.commit()
+    finally:
+        con.close()
+
+
+def hero(html):
+    return re.search(r'<section class="card hero".*?</section>', html, re.S).group(0)
+
+
+def details_tag(html, needle):
+    """Opening tag of the <details> that encloses `needle`."""
+    i = html.index(needle)
+    start = html.rindex("<details", 0, i)
+    assert "</details>" not in html[start:i], needle
+    return html[start : html.index(">", start) + 1]
 
 
 def jpeg(size=(2400, 1200), gps=False) -> bytes:
@@ -142,7 +164,95 @@ def test_totals_with_targets(client):
     con.close()
     client.post("/entries", data={"kind": "other", "description": "x", "calories": "300", "protein_g": "20"})
     t = client.get("/").text
-    assert "300 / 2000" in t and "20 / 100" in t
+    assert "1,700 left" in t and "20 of 100 g protein" in t
+
+
+def test_hero_no_target(client):
+    client.post("/entries", data={"kind": "other", "description": "x", "calories": "500", "protein_g": "20"})
+    h = hero(client.get("/").text)
+    assert '<svg class="ring"' not in h and "left" not in h and "over" not in h
+    assert "500" in h and "20 g protein" in h and "<progress" not in h
+
+
+def test_hero_under_target(client):
+    run("UPDATE users SET cal_target = 2000")
+    client.post("/entries", data={"kind": "other", "description": "x", "calories": "500"})
+    h = hero(client.get("/").text)
+    assert '<svg class="ring"' in h and 'stroke-dasharray="25 100"' in h and "1,500 left" in h and "over" not in h
+
+
+def test_hero_empty_ring_has_no_progress_arc(client):
+    run("UPDATE users SET cal_target = 2000")
+    h = hero(client.get("/").text)
+    assert '<svg class="ring"' in h and "stroke-dasharray" not in h and "2,000 left" in h
+
+
+def test_hero_over_target(client):
+    run("UPDATE users SET cal_target = 2000, protein_target = 100")
+    client.post("/entries", data={"kind": "other", "description": "x", "calories": "2120", "protein_g": "130"})
+    h = hero(client.get("/").text)
+    assert 'stroke-dasharray="100 100"' in h and "120 over" in h and "left" not in h
+    assert "danger" not in h and "warning" not in h
+    assert '<progress' in h and "130 of 100 g protein" in h
+
+
+def test_week_dots(client):
+    last_week = (today.local_today() - timedelta(days=7)).isoformat()
+    run("INSERT INTO entries (user_id, day, created_at, kind) VALUES ('u1', ?, ?, 'cooked')", last_week, last_week)
+    client.post("/entries", data={"kind": "cooked", "description": "soup"})
+    client.post("/entries", data={"kind": "cooked", "description": "soup", "leftovers": "on"})
+    client.post("/entries", data={"kind": "other", "description": "snack"})
+    h = hero(client.get("/").text)
+    assert "2 of 3" in h and 'href="/me"' in h
+    assert h.count('class="dot on"') == 2 and h.count('class="dot"') == 1 and "week-extra" not in h
+    for _ in range(3):
+        client.post("/entries", data={"kind": "cooked", "description": "soup"})
+    h = hero(client.get("/").text)
+    assert h.count('class="dot on"') == 3 and h.count('class="dot"') == 0 and "+2" in h
+
+
+def test_optional_fields_collapsed(client):
+    photo, add_food = 'name="photo"', 'value="other"'
+    t = client.get("/").text
+    assert " open" not in details_tag(t, photo) and " open" not in details_tag(t, add_food)
+    t = client.post("/entries", data={"kind": "cooked"}).text
+    assert "Add a description or pick a recipe" in t
+    assert details_tag(t, photo).endswith(" open>") and " open" not in details_tag(t, add_food)
+    t = client.post("/entries", data={"kind": "other"}).text
+    assert details_tag(t, add_food).endswith(" open>") and " open" not in details_tag(t, photo)
+    t = client.post("/entries", data={"kind": "cooked", "description": "x"}, files={"photo": ("a.jpg", b"not an image")}).text
+    assert "That file isn" in t and details_tag(t, photo).endswith(" open>")
+
+
+def test_remove_is_disclosed(client):
+    client.post("/entries", data={"kind": "other", "description": "x"})
+    eid = rows("SELECT id FROM entries")[0][0]
+    t = client.get("/").text
+    form = f'action="/entries/{eid}/delete"'
+    assert " open" not in details_tag(t, form)
+    assert 'aria-label="More"' in t[t.rindex("<details", 0, t.index(form)) : t.index(form)]
+
+
+def test_entry_time_uses_tz(client, monkeypatch):
+    monkeypatch.setenv("TZ", "America/Indiana/Indianapolis")
+    monkeypatch.setattr(today, "_now", lambda: datetime(2026, 11, 9, 23, 40, tzinfo=timezone.utc))
+    client.post("/entries", data={"kind": "other", "description": "x"})
+    t = client.get("/").text
+    assert "6:40 PM" in t and "Monday 9 Nov" in t
+
+
+def test_date_label_uses_tz(client, monkeypatch):
+    monkeypatch.setenv("TZ", "America/Indiana/Indianapolis")
+    monkeypatch.setattr(today, "_now", lambda: datetime(2026, 11, 10, 2, 0, tzinfo=timezone.utc))
+    assert "Monday 9 Nov" in client.get("/").text
+
+
+def test_kitchen_links(client, monkeypatch):
+    assert "Kitchen" not in client.get("/").text
+    monkeypatch.setitem(auth.templates.env.globals, "mealie_url", "http://mealie.test")
+    t = client.get("/").text
+    for label in ("Recipes", "Meal plan", "Shopping list"):
+        assert f'<a href="http://mealie.test">{label}' in t
 
 
 def test_recipe_search(client, mock_mealie):
