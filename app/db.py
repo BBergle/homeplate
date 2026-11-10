@@ -78,6 +78,15 @@ CREATE TABLE IF NOT EXISTS workouts (
     note TEXT,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
+    role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+    content TEXT,      -- NULL on an assistant row: the answer is still being fetched
+    sources TEXT,      -- JSON list of {"url","title"}
+    error INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
 """
 
 

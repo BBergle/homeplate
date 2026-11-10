@@ -1,7 +1,11 @@
+import json
+from datetime import datetime, timedelta, timezone
+
 import httpx
 import pytest
+from conftest import CHAT, cite, err, reply
 
-from app import ai, db
+from app import ai, ask, db, today
 
 
 def user_row():  # the only user in these tests
@@ -78,3 +82,150 @@ def test_overlong_key_refused(client, mock_ai):
 def test_remove_key(ai_client):
     r = save(ai_client, remove="1")
     assert r.status_code == 303 and user_row()["ai_key_enc"] is None
+
+
+HX = {"HX-Request": "true"}
+
+
+def rows():
+    con = db.connect()
+    out = con.execute("SELECT * FROM chat_messages ORDER BY id").fetchall()
+    con.close()
+    return out
+
+
+def add_row(role, content, minutes_ago=0, error=0, user_id="u1"):
+    at = (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat()
+    con = db.connect()
+    con.execute("INSERT INTO chat_messages (user_id, role, content, error, created_at) VALUES (?, ?, ?, ?, ?)", (user_id, role, content, error, at))
+    con.commit()
+    con.close()
+
+
+def test_no_key_page(client, mock_ai):
+    r = client.get("/ask")
+    assert r.status_code == 200 and "Add your AI key" in r.text and 'href="/me#ai"' in r.text and "<textarea" not in r.text
+    assert client.post("/ask", data={"message": "hi"}, follow_redirects=False).status_code == 303 and rows() == []
+    assert client.get("/ask/chat", follow_redirects=False).status_code == 303
+
+
+def test_key_unreadable_after_secret_change(ai_client, monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "a-different-secret")
+    r = ai_client.get("/ask")
+    assert r.status_code == 200 and "Add your AI key" in r.text
+
+
+def test_ask_and_answer(ai_client, mock_ai):
+    mock_ai[CHAT] = reply("Use bread flour.", [cite("https://k.com/r", "King Arthur")])
+    r = ai_client.post("/ask", data={"message": "Best flour for rolls?"}, headers=HX)
+    assert r.status_code == 200 and "Best flour for rolls?" in r.text and "Thinking" in r.text
+    assert 'hx-trigger="every 3s"' in r.text and "disabled" in r.text
+    done = ai_client.get("/ask/chat").text  # TestClient runs the background task before returning
+    assert "Use bread flour." in done and "Thinking" not in done and "every 3s" not in done and "disabled" not in done
+    assert '<a href="https://k.com/r" target="_blank" rel="noopener noreferrer">King Arthur</a>' in done
+    full = ai_client.get("/ask").text
+    assert "Use bread flour." in full and 'action="/ask/new"' in done
+
+
+def test_messages_sent_to_model(ai_client, mock_ai):
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return reply("A1")
+
+    mock_ai[CHAT] = handler
+    ai_client.post("/ask", data={"message": "Q1"}, headers=HX)
+    add_row("assistant", "Your OpenRouter account is out of credit.", error=1)
+    ai_client.post("/ask", data={"message": "Q2"}, headers=HX)
+    sys = bodies[0]["messages"][0]
+    assert sys["role"] == "system" and today.local_today().strftime("%A, %B %-d, %Y") in sys["content"]
+    assert bodies[0]["messages"][1:] == [{"role": "user", "content": "Q1"}]
+    assert bodies[1]["messages"][1:] == [{"role": "user", "content": "Q1"}, {"role": "assistant", "content": "A1"}, {"role": "user", "content": "Q2"}]
+    assert bodies[1]["model"] == "openai/gpt-5-nano"
+
+
+def test_history_capped(ai_client, mock_ai):
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return reply("ok")
+
+    mock_ai[CHAT] = handler
+    for i in range(30):
+        add_row("user" if i % 2 == 0 else "assistant", f"old{i}", minutes_ago=100 - i)
+    ai_client.post("/ask", data={"message": "new"}, headers=HX)
+    msgs = bodies[0]["messages"]
+    assert len(msgs) == 1 + ask.HISTORY and msgs[-1] == {"role": "user", "content": "new"}
+    assert msgs[1]["content"] == "old11"
+
+
+def test_provider_error_shown(ai_client, mock_ai):
+    mock_ai[CHAT] = err(402)
+    ai_client.post("/ask", data={"message": "Q"}, headers=HX)
+    t = ai_client.get("/ask/chat").text
+    assert "out of credit" in t and "chat-error" in t and rows()[-1]["error"] == 1
+
+
+def test_unexpected_failure_does_not_hang(ai_client, monkeypatch):
+    def boom(*a):
+        raise RuntimeError("nope")
+
+    monkeypatch.setattr(ai, "chat", boom)
+    ai_client.post("/ask", data={"message": "Q"}, headers=HX)
+    t = ai_client.get("/ask/chat").text
+    assert "The AI service didn&#39;t answer. Try again." in t and "every 3s" not in t and rows()[-1]["error"] == 1
+
+
+def test_answer_is_escaped(ai_client, mock_ai):
+    mock_ai[CHAT] = reply("<script>alert(1)</script>")
+    ai_client.post("/ask", data={"message": "Q"}, headers=HX)
+    t = ai_client.get("/ask/chat").text
+    assert "&lt;script&gt;" in t and "<script>alert" not in t
+
+
+def test_second_message_while_waiting_is_ignored(ai_client, mock_ai):
+    add_row("user", "Q1")
+    add_row("assistant", None)
+    ai_client.post("/ask", data={"message": "Q2"}, headers=HX)
+    assert [r["content"] for r in rows()] == ["Q1", None]
+
+
+def test_stale_wait_becomes_error(ai_client):
+    add_row("user", "Q1", minutes_ago=10)
+    add_row("assistant", None, minutes_ago=10)
+    t = ai_client.get("/ask/chat").text
+    assert "That took too long. Ask again." in t and "every 3s" not in t and "disabled" not in t
+
+
+def test_blank_and_long_messages(ai_client, mock_ai):
+    mock_ai[CHAT] = reply("ok")
+    ai_client.post("/ask", data={"message": "   "}, headers=HX)
+    assert rows() == []
+    ai_client.post("/ask", data={"message": "x" * 5000}, headers=HX)
+    assert rows()[0]["content"] == "x" * 4000
+
+
+def test_plain_post_redirects(ai_client, mock_ai):
+    mock_ai[CHAT] = reply("ok")
+    r = ai_client.post("/ask", data={"message": "Q"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ask" and len(rows()) == 2
+
+
+def test_conversations_are_private(ai_client, login_as, mock_ai):
+    add_row("user", "secret question")
+    other = login_as("u2")
+    assert save(other, key="sk-or-two").status_code == 303
+    assert "secret question" not in other.get("/ask/chat").text
+    assert "secret question" in ai_client.get("/ask/chat").text
+
+
+def test_new_chat(ai_client, login_as, mock_ai):
+    add_row("user", "mine")
+    other = login_as("u2")
+    assert save(other, key="sk-or-two").status_code == 303
+    add_row("user", "theirs", user_id="u2")
+    r = ai_client.post("/ask/new", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ask"
+    assert [(r["user_id"], r["content"]) for r in rows()] == [("u2", "theirs")]

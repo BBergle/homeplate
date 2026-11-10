@@ -1,11 +1,10 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
 {% block content %}
-{% set order = request.url.path == "/order" %}
-<header class="page-head"><h1>{{ "Order" if order else "Ask" }}</h1></header>
+<header class="page-head"><h1>Order</h1></header>
 <section class="card empty">
-  {{ icon("order" if order else "ask") }}
-  <h2>{{ "Grocery ordering is on the way" if order else "The food assistant is on the way" }}</h2>
+  {{ icon("order") }}
+  <h2>Grocery ordering is on the way</h2>
   <p class="muted">{{ blurb }}</p>
   {% if mealie_url %}<a class="btn btn-secondary" href="{{ mealie_url }}">Recipes in Mealie</a>{% endif %}
 </section>

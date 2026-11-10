@@ -155,6 +155,3 @@ def order(request: Request, user=Depends(auth.current_user)):
     return auth.templates.TemplateResponse(request, "soon.html", {"blurb": "Order groceries from your shopping list."})
 
 
-@router.get("/ask")
-def ask(request: Request, user=Depends(auth.current_user)):
-    return auth.templates.TemplateResponse(request, "soon.html", {"blurb": "Ask food and nutrition questions."})
