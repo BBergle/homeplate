@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+{% if forbidden %}
+<section class="card empty">
+  {{ icon("lock") }}
+  <h1>Admins only</h1>
+  <p class="muted">Ask the person who runs this server.</p>
+</section>
+{% else %}
+<header class="page-head"><h1>Admin</h1></header>
+{% if error %}<p class="msg msg-error" role="alert">{{ error }}</p>{% endif %}
+
+<section class="card" aria-labelledby="acc-h">
+  <h2 id="acc-h">Account requests</h2>
+  <p>Sign-up requests are <strong>{{ "On" if open else "Off" }}</strong>. {% if open %}"Create account" shows on the sign-in screen.{% else %}Nobody can ask for an account.{% endif %}</p>
+  <form method="post" action="/admin/signups">
+    <input type="hidden" name="open" value="{{ '0' if open else '1' }}">
+    <button class="{{ 'btn-secondary' if open else 'btn-primary' }}">{{ "Turn off" if open else "Turn on" }}</button>
+  </form>
+</section>
+
+<section class="card" aria-labelledby="pend-h">
+  <h2 id="pend-h">Waiting for you</h2>
+  {% for r in pending %}
+  <article class="req">
+    <h3 class="wrap-any">{{ r["name"] }}</h3>
+    <p class="wrap-any">{{ r["email"] }}</p>
+    {% if r["note"] %}<p class="wrap-any">{{ r["note"] }}</p>{% endif %}
+    <p class="muted req-date">{{ r["created_at"][:10] }}</p>
+    <form method="post" action="/admin/requests/{{ r['id'] }}/approve">
+      <fieldset>
+        <legend>Add them to</legend>
+        <label><input type="radio" name="where" value="mine" checked> My household</label>
+        <label><input type="radio" name="where" value="new"> Their own household</label>
+      </fieldset>
+      <label>Household name <input name="household_name" maxlength="50"></label>
+      <button>Approve</button>
+    </form>
+    <form method="post" action="/admin/requests/{{ r['id'] }}/decline"><button class="btn-danger">Decline</button></form>
+  </article>
+  {% else %}
+  <p class="muted">No requests waiting.</p>
+  {% endfor %}
+</section>
+
+<section class="card" aria-labelledby="rec-h">
+  <h2 id="rec-h">Recent</h2>
+  {% for r in recent %}
+  <article class="req">
+    <h3 class="wrap-any">{{ r["name"] }}</h3>
+    <p class="muted">{{ "Approved" if r["status"] == "approved" else "Declined" }} {{ (r["decided_at"] or "")[:10] }}</p>
+    {% if r["status"] == "approved" and r["invite_token"] %}
+    <label class="field">Join link <input type="text" readonly value="{{ base }}/join/{{ r['invite_token'] }}" autocomplete="off"></label>
+    {% endif %}
+  </article>
+  {% else %}
+  <p class="muted">Nothing decided yet.</p>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

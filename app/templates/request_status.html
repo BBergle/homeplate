@@ -1,0 +1,20 @@
+{% extends "public.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Account request{% endblock %}
+{% block content %}
+<div class="login">
+  <h1 class="wordmark">{{ icon("plate") }}homeplate</h1>
+  <section class="card empty">
+    {% if state == "approved" %}
+    <h2>You're approved</h2>
+    <p>Create your account to get started.</p>
+    <a class="btn btn-primary" href="/join/{{ token }}">Create your account</a>
+    {% elif state == "declined" %}
+    <h2>This request wasn't approved.</h2>
+    {% else %}
+    <h2>Request sent</h2>
+    <p class="muted">Request sent. Keep this page: it will change when your request is answered.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

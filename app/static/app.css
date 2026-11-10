@@ -358,3 +358,13 @@ legend { padding: 0; margin: 0 0 var(--s-3); font-size: var(--t-h2); font-weight
 
 /* ---------- Join ---------- */
 .login h2.tagline { font-size: var(--t-h2); font-weight: 650; }
+
+/* ---------- Admin ---------- */
+.req { padding: var(--s-4) 0; border-top: 1px solid var(--line); }
+.req:first-of-type { padding-top: 0; border-top: 0; }
+.req h3 { margin: 0 0 var(--s-1); font-size: var(--t-body); }
+.req p { margin: 0 0 var(--s-2); }
+.req .req-date { font-size: var(--t-small); }
+.req form { margin: var(--s-4) 0 0; }
+.req .field { margin: 0; }
+.login > .btn { display: flex; margin-top: var(--s-3); }

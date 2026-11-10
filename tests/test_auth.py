@@ -182,7 +182,7 @@ def test_every_route_requires_a_session(mock_mealie):
 
     for route in walk(app.routes):
         path = route.path
-        if path in ("/login", "/healthz") or path.startswith(("/static", "/join/", "/request")):
+        if path in ("/login", "/healthz", "/request") or path.startswith(("/static", "/join/", "/request/")):
             continue
         method = "POST" if "POST" in route.methods else "GET"
         r = c.request(method, re.sub(r"\{[^}]+\}", "1", path), follow_redirects=False)
