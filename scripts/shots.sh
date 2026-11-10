@@ -1,10 +1,10 @@
 #!/bin/bash
 # Screenshot homeplate pages at a true phone-width viewport, light and dark (dev tool).
-# usage: [WIDTH=375] [BASE=http://localhost:8000] scripts/shots.sh OUT_DIR [path ...]   (paths default to / /me /order /ask /login)
+# usage: [WIDTH=375] [BASE=http://localhost:8000] scripts/shots.sh OUT_DIR [path ...]   (paths default to /ask /settings /login)
 # Needs the local stack: app on :8000, Mealie test admin. Writes OUT_DIR/<name>-light.png and -dark.png
 set -euo pipefail
 OUT=${1:?out dir}; shift || true
-PATHS=("$@"); [ ${#PATHS[@]} -eq 0 ] && PATHS=(/ /me /order /ask /login)
+PATHS=("$@"); [ ${#PATHS[@]} -eq 0 ] && PATHS=(/ask /settings /login)
 BASE=${BASE:-http://localhost:8000}
 W=${WIDTH:-375}
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"

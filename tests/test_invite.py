@@ -104,10 +104,6 @@ def test_invite_needs_session(mock_mealie):
     assert r.status_code == 303 and r.headers["location"] == "/login"
 
 
-def test_me_links_to_invite(client):
-    assert 'href="/invite"' in client.get("/me").text
-
-
 def join_mocks(mock_mealie):
     mock_mealie[REG] = httpx.Response(201, json={})
     mock_mealie[("POST", "/api/auth/token")] = httpx.Response(200, json={"access_token": "tok-new"})
@@ -124,7 +120,7 @@ def test_join_creates_account_and_signs_in(mock_mealie, monkeypatch):
         "groupToken": "tok9", "email": "f@x.io", "username": "fran", "fullName": "Fran",
         "password": FORM["password"], "passwordConfirm": FORM["password"],
     }]
-    assert c.get("/").status_code == 200
+    assert c.get("/ask").status_code == 200
 
 
 def test_join_password_rules(mock_mealie):

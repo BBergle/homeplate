@@ -1,5 +1,4 @@
 import os
-import re
 from urllib.parse import quote
 
 import httpx
@@ -96,13 +95,6 @@ def recipe(token: str, slug_or_id: str) -> dict:
     return _request("GET", f"/api/recipes/{quote(slug_or_id, safe='')}", token)
 
 
-def recipe_image(recipe_id: str) -> bytes | None:
-    try:
-        return _send("GET", f"/api/media/recipes/{quote(recipe_id, safe='')}/images/min-original.webp").content
-    except MealieNotFound:
-        return None
-
-
 def test_scrape(token: str, url: str) -> dict | None:
     try:
         data = _request("POST", "/api/recipes/test-scrape-url", token, json={"url": url}, timeout=20)
@@ -122,13 +114,3 @@ def test_scrape(token: str, url: str) -> dict | None:
 
 def import_url(token: str, url: str) -> str:
     return _request("POST", "/api/recipes/create/url", token, json={"url": url, "includeTags": False}, timeout=60)
-
-
-def planned_today(token: str) -> list[dict]:
-    entries = _request("GET", "/api/households/mealplans/today", token)
-    return [e["recipe"] for e in entries if e.get("recipe")]
-
-
-def leading_number(value: str | None) -> int | None:
-    m = re.search(r"\d+", value or "")
-    return int(m.group()) if m else None
