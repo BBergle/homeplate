@@ -63,7 +63,6 @@ def test_login_autofill(mock_mealie):
 def test_public_csp(mock_mealie):
     c = TestClient(app)
     assert c.get("/join/x").headers["content-security-policy"] == CSP
-    assert c.get("/s/nope").headers["content-security-policy"] == CSP
     assert "content-security-policy" not in c.get("/login").headers
 
 

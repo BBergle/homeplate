@@ -37,4 +37,5 @@ def test_connect_creates_schema_twice(tmp_path, monkeypatch):
         cols = {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
         con.close()
     assert "refreshed_at" in cols
-    assert {"users", "sessions", "entries", "photos", "weights", "shares"} <= names
+    assert {"users", "sessions", "entries", "photos", "weights"} <= names
+    assert "shares" not in names

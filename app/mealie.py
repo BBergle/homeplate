@@ -1,6 +1,5 @@
 import os
 import re
-from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 import httpx
@@ -95,22 +94,6 @@ def search_recipes(token: str, q: str) -> list[dict]:
 
 def recipe(token: str, slug_or_id: str) -> dict:
     return _request("GET", f"/api/recipes/{quote(slug_or_id, safe='')}", token)
-
-
-def create_share(token: str, recipe_id: str) -> str:
-    expires = (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat()
-    return _request("POST", "/api/shared/recipes", token, json={"recipeId": recipe_id, "expiresAt": expires})["id"]
-
-
-def delete_share(token: str, share_id: str) -> None:
-    try:
-        _send("DELETE", f"/api/shared/recipes/{quote(share_id, safe='')}", token)
-    except MealieNotFound:
-        pass
-
-
-def shared_recipe(share_id: str) -> dict:
-    return _request("GET", f"/api/recipes/shared/{quote(share_id, safe='')}")
 
 
 def recipe_image(recipe_id: str) -> bytes | None:

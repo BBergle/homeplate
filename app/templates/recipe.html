@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ recipe["name"] }}{% endblock %}
+{% block content %}
+{% set servings = recipe.get("recipeServings") %}
+<article class="recipe">
+{% if recipe.get("image") %}<img class="hero" src="/r/{{ recipe['id'] }}/image" alt="" width="640" height="480" fetchpriority="high">{% endif %}
+<h1 class="recipe-title">{{ recipe["name"] }}</h1>
+{% if recipe.get("totalTime") or servings or calories or protein %}
+<p class="chips">
+  {% if recipe.get("totalTime") %}<span class="chip">{{ recipe["totalTime"] }}</span>{% endif %}
+  {% if servings %}<span class="chip">Serves {{ servings | int if servings == servings | int else servings }}</span>{% endif %}
+  {% if calories %}<span class="chip">{{ calories }} kcal</span>{% endif %}
+  {% if protein %}<span class="chip">{{ protein }} g protein</span>{% endif %}
+</p>
+{% endif %}
+{% if recipe.get("description") %}<p class="recipe-desc">{{ recipe["description"] }}</p>{% endif %}
+<section class="card">
+  <h2>Ingredients</h2>
+  <ul class="ingredients" role="list">{% for i in recipe["recipeIngredient"] or [] %}
+    {% if i.get("title") %}<li class="sub">{{ i["title"] }}</li>{% endif %}
+    <li>{{ i["display"] }}</li>{% endfor %}
+  </ul>
+</section>
+<section>
+  <h2>Method</h2>
+  <ol class="steps" role="list">{% for s in recipe["recipeInstructions"] or [] %}
+    <li>{% if s.get("title") %}<strong>{{ s["title"] }}</strong>{% endif %}<span class="step-text">{{ s["text"] }}</span></li>{% endfor %}
+  </ol>
+</section>
+<section>
+  <h2>Photos</h2>
+  <p class="muted">{{ photos | length }} photo{{ "" if photos | length == 1 else "s" }}</p>
+  {% if photos %}
+  <ul class="photo-grid" role="list">{% for p in photos %}
+    <li class="shot">
+      <a href="/photos/{{ p['id'] }}"><img src="/photos/{{ p['id'] }}" alt="Photo of {{ recipe['name'] }}" loading="lazy" width="200" height="200"></a>
+      {% if p["user_id"] == uid %}
+      <div class="shot-bar">
+        {% if p["private"] %}<span class="chip">{{ icon("lock") }}Private</span>{% endif %}
+        <details class="more">
+          <summary aria-label="Photo options">{{ icon("more") }}</summary>
+          <form method="post" action="/photos/{{ p['id'] }}/private">
+            <button class="btn btn-secondary">{{ "Make public" if p["private"] else "Make private" }}</button>
+          </form>
+        </details>
+      </div>
+      {% endif %}
+    </li>{% endfor %}
+  </ul>
+  {% else %}
+  <div class="card empty">
+    {{ icon("camera") }}
+    <h3>No photos yet</h3>
+    <p class="muted">Log this recipe with a photo on Today and it will show up here.</p>
+  </div>
+  {% endif %}
+</section>
+<section class="card">
+  <h2>Link to this recipe</h2>
+  <label class="field">Link <input value="{{ link }}" readonly></label>
+  <p class="recipe-link"><a href="{{ link }}">{{ link }}</a></p>
+  <p class="muted">Only people with an account can open this.</p>
+</section>
+{% if mealie_url and group %}<p class="open-mealie"><a class="btn btn-secondary" href="{{ mealie_url }}/g/{{ group }}/r/{{ recipe['slug'] }}">Open in Mealie</a></p>{% endif %}
+</article>
+{% endblock %}

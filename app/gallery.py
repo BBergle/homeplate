@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 
 from app import auth, db, mealie
 
@@ -6,7 +7,7 @@ router = APIRouter()
 
 
 @router.get("/r/{recipe_id}")
-def gallery(request: Request, recipe_id: str, user=Depends(auth.current_user)):
+def recipe_page(request: Request, recipe_id: str, user=Depends(auth.current_user)):
     token = user["mealie_token"]
     try:
         r = mealie.recipe(token, recipe_id)
@@ -20,9 +21,23 @@ def gallery(request: Request, recipe_id: str, user=Depends(auth.current_user)):
             "ORDER BY created_at DESC, id DESC",
             (r["id"], uid),
         ).fetchall()
-        shared = con.execute("SELECT token FROM shares WHERE recipe_id = ?", (r["id"],)).fetchone()
     finally:
         con.close()
-    base = auth.base_url(request)
-    ctx = {"recipe": r, "photos": photos, "uid": uid, "share_url": shared and f"{base}/s/{shared['token']}", "group": mealie.me(token).get("groupSlug")}
-    return auth.templates.TemplateResponse(request, "gallery.html", ctx)
+    n = r.get("nutrition") or {}
+    ctx = {
+        "recipe": r, "photos": photos, "uid": uid, "group": mealie.me(token).get("groupSlug"),
+        "link": f"{auth.base_url(request)}/r/{r['id']}",
+        "calories": mealie.leading_number(n.get("calories")), "protein": mealie.leading_number(n.get("proteinContent")),
+    }
+    return auth.templates.TemplateResponse(request, "recipe.html", ctx)
+
+
+@router.get("/r/{recipe_id}/image")
+def recipe_image(recipe_id: str, user=Depends(auth.current_user)):
+    try:
+        data = mealie.recipe_image(mealie.recipe(user["mealie_token"], recipe_id)["id"])
+    except mealie.MealieNotFound:
+        data = None
+    if not data:
+        raise HTTPException(404)
+    return Response(data, media_type="image/webp")

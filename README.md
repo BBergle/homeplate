@@ -21,9 +21,7 @@ homeplate is on http://localhost:8000 (`/healthz`), Mealie on http://localhost:9
 
 ## Sharing
 
-Any signed-in user can create a public link for a recipe from its gallery page (`/r/<id>`). Anyone with the link, no account needed, sees the recipe and everyone's non-private photos of it, nothing about who cooked it. "Stop sharing" kills the link. No extra Mealie setup is needed.
-
-A share link's token is a Mealie share token. If Mealie itself is reachable from the internet, someone holding a share link who knows the Mealie address can read that recipe's full Mealie record (including the names of people who commented on it) through Mealie's own API.
+Nothing in homeplate is public: only people with an account can see any recipe, photo or user detail. The recipe page (`/r/<id>`) shows the full recipe and everyone's non-private photos. Its "Link to this recipe" card is an ordinary link; without an account it leads to the sign-in screen and, after signing in, back to that recipe.
 
 ## Invites
 
