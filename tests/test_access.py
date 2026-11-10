@@ -1,5 +1,6 @@
 import re
 import sqlite3
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi.testclient import TestClient
@@ -67,7 +68,7 @@ def test_request_flow(login_as, mock_mealie):
     assert r.status_code == 303
     (row,) = rows()
     assert row["status"] == "pending" and row["name"] == "Fran" and row["email"] == "fran@x.io" and row["note"] == "hi"
-    assert r.headers["location"] == f"/request/{row['secret']}" and len(row["secret"]) == 43
+    assert r.headers["location"] == f"/request/{row['secret']}" and len(row["secret"]) == 65
     page = anon.get(r.headers["location"])
     assert "Request sent" in page.text and "Fran" not in page.text and "fran@x.io" not in page.text
 
@@ -82,18 +83,39 @@ def test_request_validation(login_as, mock_mealie):
     assert rows() == []
 
 
+DECOY = r"^/request/[A-Za-z0-9_-]{65}$"
+
+
 def test_request_limits(login_as, mock_mealie):
     open_signups(admin(login_as, mock_mealie))
-    assert submit().status_code == 303
+    anon = TestClient(app)
+    first = submit()
+    real = anon.get(first.headers["location"])
+    assert real.status_code == 200 and "Request sent" in real.text
     r = submit(FORM | {"email": " FRAN@x.io "})
-    assert r.status_code == 303 and r.headers["location"] == "/request/sent" and len(rows()) == 1
-    page = TestClient(app).get("/request/sent")
-    assert page.status_code == 200 and "Request sent" in page.text and "fran" not in page.text.lower()
+    assert r.status_code == 303 and re.match(DECOY, r.headers["location"]) and len(rows()) == 1
+    assert r.headers["location"] != first.headers["location"]
+    page = anon.get(r.headers["location"])
+    assert page.status_code == 200 and page.content == real.content
     for i in range(19):
-        assert submit(FORM | {"email": f"p{i}@x.io"}).headers["location"] != "/request/sent"
+        assert submit(FORM | {"email": f"p{i}@x.io"}).status_code == 303
     assert len(rows()) == 20
     r = submit(FORM | {"email": "late@x.io"})
-    assert r.status_code == 303 and r.headers["location"] == "/request/sent" and len(rows()) == 20
+    assert r.status_code == 303 and re.match(DECOY, r.headers["location"]) and len(rows()) == 20
+    assert anon.get(r.headers["location"]).content == real.content
+
+
+def test_bad_signature_is_404(login_as, mock_mealie, monkeypatch):
+    open_signups(admin(login_as, mock_mealie))
+    anon = TestClient(app)
+    loc = submit(FORM | {"email": "FRAN@x.io"}).headers["location"]  # a decoy once a row exists
+    submit()
+    decoy = submit().headers["location"]
+    assert anon.get(decoy).status_code == 200
+    assert anon.get(decoy[:-1] + ("A" if decoy[-1] != "A" else "B")).status_code == 404
+    monkeypatch.setenv("SECRET_KEY", "another")
+    assert anon.get(decoy).status_code == 404
+    assert anon.get("/request/sent").status_code == 404
 
 
 def test_status_page_states(login_as, mock_mealie):
@@ -220,7 +242,7 @@ def test_public_headers_on_request(login_as, mock_mealie):
     open_signups(admin(login_as, mock_mealie))
     anon = TestClient(app)
     loc = submit().headers["location"]
-    for r in (anon.get("/request"), anon.post("/request", data=FORM | {"name": ""}), anon.get(loc), anon.get("/request/sent")):
+    for r in (anon.get("/request"), anon.post("/request", data=FORM | {"name": ""}), anon.get(loc)):
         assert r.headers["referrer-policy"] == "same-origin" and r.headers["x-robots-tag"] == "noindex"
         assert r.headers["content-security-policy"] == CSP
     assert "x-robots-tag" not in anon.get("/requestx").headers
@@ -245,3 +267,34 @@ def test_is_admin_migration(data_dir):
     con.close()
     con = db.connect()
     assert "is_admin" in [r["name"] for r in con.execute("PRAGMA table_info(users)")]
+
+
+def test_orphaned_approval_resets_on_admin_load(login_as, mock_mealie):
+    c = admin(login_as, mock_mealie)
+    open_signups(c)
+    submit()
+    submit(FORM | {"email": "b@x.io"})
+    con = db.connect()
+    con.execute("UPDATE requests SET status='approved', decided_by='u1', decided_at=? WHERE id=1",
+                ((datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(),))
+    con.execute("UPDATE requests SET status='approved', decided_by='u1', decided_at=? WHERE id=2",
+                (datetime.now(timezone.utc).isoformat(),))
+    con.commit()
+    loc = "/request/" + rows()[0]["secret"]
+    assert "Request sent" in TestClient(app).get(loc).text  # approved without a token reads as pending
+    c.get("/admin")
+    got = {r["id"]: r for r in rows()}
+    assert got[1]["status"] == "pending" and got[1]["decided_at"] is None and got[1]["decided_by"] is None
+    assert got[2]["status"] == "approved"
+
+
+def test_admin_dates_in_local_time(login_as, mock_mealie, monkeypatch):
+    monkeypatch.setenv("TZ", "America/Indiana/Indianapolis")
+    c = admin(login_as, mock_mealie)
+    open_signups(c)
+    submit()
+    con = db.connect()
+    con.execute("UPDATE requests SET created_at='2026-11-10T02:00:00+00:00'")
+    con.commit()
+    t = c.get("/admin").text
+    assert "9 Nov" in t and "10 Nov" not in t

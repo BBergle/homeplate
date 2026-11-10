@@ -1,10 +1,13 @@
+import base64
+import hmac
+import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
-from app import auth, db, invite, mealie
+from app import auth, db, invite, mealie, today
 
 router = APIRouter()
 MAX_PENDING = 20
@@ -16,6 +19,27 @@ class NotAdmin(Exception):
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _sig(rand: str) -> str:
+    key = os.environ.get("SECRET_KEY", "dev").encode()
+    return base64.urlsafe_b64encode(hmac.new(key, rand.encode(), "sha256").digest()[:16]).rstrip(b"=").decode()
+
+
+def new_secret() -> str:
+    """43 random characters plus a 22-character signature: real and decoy secrets look the same."""
+    rand = secrets.token_urlsafe(32)
+    return rand + _sig(rand)
+
+
+def _decoy_ok(secret: str) -> bool:
+    return len(secret) == 65 and hmac.compare_digest(secret[43:], _sig(secret[:43]))
+
+
+def local_date(iso: str | None) -> str:
+    """'9 Nov' in the app's TZ."""
+    d = datetime.fromisoformat(iso).astimezone(today._tz()) if iso else None
+    return f"{d.day} {d:%b}" if d else ""
 
 
 def signups_open() -> bool:
@@ -56,7 +80,7 @@ def request_submit(request: Request, name: str = Form(""), email: str = Form("")
         return _form(request, error, name=name, email=email if len(email) <= 254 else "", note=note if len(note) <= 200 else "")
     if not signups_open():
         raise HTTPException(404)
-    secret = secrets.token_urlsafe(32)
+    secret = new_secret()
     con = db.connect()
     try:
         con.execute("BEGIN IMMEDIATE")
@@ -65,7 +89,7 @@ def request_submit(request: Request, name: str = Form(""), email: str = Form("")
         ).fetchone()
         if n >= MAX_PENDING or dup:
             con.rollback()
-            return RedirectResponse("/request/sent", 303)  # same answer as success, nothing revealed
+            return RedirectResponse(f"/request/{new_secret()}", 303)  # decoy: same shape as success, nothing revealed
         con.execute(
             "INSERT INTO requests (secret, name, email, note, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)",
             (secret, name, email, note or None, _now()),
@@ -82,11 +106,6 @@ def _status(request: Request, state: str, token: str | None = None):
     return auth.templates.TemplateResponse(request, "request_status.html", {"state": state, "token": token})
 
 
-@router.get("/request/sent")
-def request_sent(request: Request):
-    return _status(request, "pending")
-
-
 @router.get("/request/{secret}")
 def request_status(request: Request, secret: str):
     con = db.connect()
@@ -94,21 +113,30 @@ def request_status(request: Request, secret: str):
         row = con.execute("SELECT status, invite_token FROM requests WHERE secret = ?", (secret,)).fetchone()
     finally:
         con.close()
-    if not row:
-        raise HTTPException(404)
-    return _status(request, row["status"], row["invite_token"])
+    if row:
+        return _status(request, row["status"], row["invite_token"])
+    if _decoy_ok(secret):
+        return _status(request, "pending")
+    raise HTTPException(404)
 
 
 def _admin_page(request: Request, error: str | None = None, status: int = 200):
     con = db.connect()
     try:
+        # an approval whose process died before storing the invite: put it back (in-flight ones are under 2 minutes old)
+        con.execute(
+            "UPDATE requests SET status = 'pending', decided_at = NULL, decided_by = NULL "
+            "WHERE status = 'approved' AND invite_token IS NULL AND decided_at < ?",
+            ((datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat(),),
+        )
+        con.commit()
         pending = con.execute("SELECT * FROM requests WHERE status = 'pending' ORDER BY id").fetchall()
         recent = con.execute(
             "SELECT * FROM requests WHERE status != 'pending' ORDER BY decided_at DESC, id DESC LIMIT 20"
         ).fetchall()
     finally:
         con.close()
-    ctx = {"open": signups_open(), "pending": pending, "recent": recent, "error": error, "base": auth.base_url(request)}
+    ctx = {"open": signups_open(), "pending": pending, "recent": recent, "error": error, "base": auth.base_url(request), "local_date": local_date}
     return auth.templates.TemplateResponse(request, "admin.html", ctx, status_code=status)
 
 
@@ -118,10 +146,10 @@ def admin_page(request: Request, user=Depends(admin_user)):
 
 
 @router.post("/admin/signups")
-def set_signups(open: str = Form(""), user=Depends(admin_user)):
+def set_signups(switch: str = Form("", alias="open"), user=Depends(admin_user)):
     con = db.connect()
     try:
-        if open == "1":
+        if switch == "1":
             con.execute("INSERT OR REPLACE INTO instance (key, value) VALUES ('signups_open', '1')")
         else:
             con.execute("DELETE FROM instance WHERE key = 'signups_open'")

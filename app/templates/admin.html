@@ -28,7 +28,7 @@
     <h3 class="wrap-any">{{ r["name"] }}</h3>
     <p class="wrap-any">{{ r["email"] }}</p>
     {% if r["note"] %}<p class="wrap-any">{{ r["note"] }}</p>{% endif %}
-    <p class="muted req-date">{{ r["created_at"][:10] }}</p>
+    <p class="muted req-date">{{ local_date(r["created_at"]) }}</p>
     <form method="post" action="/admin/requests/{{ r['id'] }}/approve">
       <fieldset>
         <legend>Add them to</legend>
@@ -50,7 +50,7 @@
   {% for r in recent %}
   <article class="req">
     <h3 class="wrap-any">{{ r["name"] }}</h3>
-    <p class="muted">{{ "Approved" if r["status"] == "approved" else "Declined" }} {{ (r["decided_at"] or "")[:10] }}</p>
+    <p class="muted">{{ "Approved" if r["status"] == "approved" else "Declined" }} {{ local_date(r["decided_at"]) }}</p>
     {% if r["status"] == "approved" and r["invite_token"] %}
     <label class="field">Join link <input type="text" readonly value="{{ base }}/join/{{ r['invite_token'] }}" autocomplete="off"></label>
     {% endif %}
