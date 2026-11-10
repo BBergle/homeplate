@@ -8,7 +8,7 @@ A self-hosted, phone-first companion app for the Mealie recipe manager, for the 
 
 ## State of the code
 
-`main` (commit `2eb2583`) has everything built. 193 tests pass locally and in CI. The image `ghcr.io/bbergle/homeplate:latest` is published on every push to `main`.
+`main` (commit `2eb2583`) has everything built (193 tests at the time). The image `ghcr.io/bbergle/homeplate:latest` is published on every push to `main`.
 
 | PR | What it added |
 |---|---|
@@ -18,7 +18,11 @@ A self-hosted, phone-first companion app for the Mealie recipe manager, for the 
 | 4 | Accounts only: public share pages removed; member recipe page; admin switch for account requests; request form, status page, admin approve or decline |
 | 5 | Workouts: manual logging, calorie estimate, net calories on Today, share-of-calories setting |
 
-Branch `assistant` (pushed, not merged) holds documents only: this file, the assistant design, two research references, and `scripts/shots.sh`.
+Branch `assistant` (not merged) holds the design documents, `scripts/shots.sh`, and assistant piece 1: the OpenRouter client (`app/ai.py`), encrypted key and model settings on the Me page, and the Ask tab with web search and sources (`app/ask.py`). 245 tests pass. Live check on 2026-11-10 against the real service: three questions answered in 5 to 10 s at about 0.1 cents each, sources shown, a second model works, and a fixed JSON format does not work together with search (see the design, "Live test results"). One fix came out of it (bare links in answers).
+
+Not checked in a real browser: the Chrome extension was not connected, so the Ask tab and settings form were driven with scripted requests (same-origin header included) and checked in headless Chrome screenshots at 375, 390 and 430 px, light and dark, for no key, empty, long answer with sources, waiting, and Me with the AI section open and with a message. Nobody has yet tapped through it on a real phone or watched the waiting bubble swap out with htmx in a live page.
+
+Next: whole-branch review, pull request to `main`, show the owner, then piece 2 of the assistant (look-up tools, proposal cards).
 
 ## Not yet verified by anyone
 
