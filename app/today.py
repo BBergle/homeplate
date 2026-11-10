@@ -48,13 +48,21 @@ def _page(request, user, error=None, open_form=None):
         ).fetchall()
     finally:
         con.close()
-    cal = sum(e["calories"] or 0 for e in entries)
+    eaten = sum(e["calories"] or 0 for e in entries)
+    burned = sum(w["calories"] for w in workouts)
+    counted, cal = stats.net_calories(eaten, burned, user["workout_pct"])  # cal: net of the counted burn
     target, goal = user["cal_target"], user["weekly_goal"]
     week = stats.week_totals([date.fromisoformat(r["day"]) for r in meal_days], d)[-1]
     ctx = {
         "entries": [dict(e, time_label=_time_label(e["created_at"])) for e in entries],
         "workouts": workouts,
-        "burned": sum(w["calories"] for w in workouts),
+        "burned": burned,
+        "eaten_burned": (
+            f"{eaten:,} eaten · {counted:,} burned" + (f" of {burned:,}" if user["workout_pct"] < 100 else "")
+            if burned else None
+        ),
+        "eaten": eaten,
+        "counted": counted,
         "has_weight": has_weight,
         "cal": cal,
         "protein": round(sum(e["protein_g"] or 0 for e in entries)),
@@ -165,6 +173,8 @@ def add_entry(
 
 @router.post("/entries/{entry_id}/delete")
 def delete_entry(entry_id: int, user=Depends(auth.current_user)):
+    if not 1 <= entry_id < 2**63:
+        raise HTTPException(404)
     uid = user["mealie_user_id"]
     con = db.connect()
     try:

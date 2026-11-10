@@ -114,3 +114,18 @@ def test_requires_session(mock_mealie):
     for path in ("/workouts", "/workouts/estimate", "/workouts/1/delete"):
         r = c.post(path, data={}, follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"] == "/login", path
+
+
+def test_zero_calories_is_entered(client):
+    post(client, calories="0")
+    w = rows("SELECT * FROM workouts")[0]
+    assert (w["calories"], w["source"]) == (0, "entered")
+
+
+def test_huge_workout_id_is_404(client):
+    assert client.post(f"/workouts/{2**63}/delete").status_code == 404
+
+
+def test_one_minute_hint(client):
+    r = client.post("/workouts/estimate", data={"activity": "cycling", "intensity": "moderate", "minutes": "1"})
+    assert "1 minute at" in r.text and "1 minutes" not in r.text

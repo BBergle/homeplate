@@ -9,7 +9,7 @@
   <div class="hero-main">
     {% if cal_pct is not none %}
     <div class="ring-box">
-      <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="{{ '{:,}'.format(cal) }} of {{ '{:,}'.format(cal_target) }} calories">
+      <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="{% if burned %}{{ '{:,}'.format(cal) }} net of {{ '{:,}'.format(cal_target) }} calories: {{ '{:,}'.format(eaten) }} eaten, {{ '{:,}'.format(counted) }} burned{% else %}{{ '{:,}'.format(cal) }} of {{ '{:,}'.format(cal_target) }} calories{% endif %}">
         <circle cx="60" cy="60" r="52" fill="none" stroke="var(--surface-2)" stroke-width="12"/>
         {% if cal_pct %}<circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="12" stroke-linecap="round"
                 pathLength="100" stroke-dasharray="{{ cal_pct }} 100" transform="rotate(-90 60 60)"/>{% endif %}
@@ -21,8 +21,10 @@
       {% if cal_pct is not none %}
       <p class="cal-remaining num">{% if cal_over %}{{ '{:,}'.format(cal_over) }} over{% else %}{{ '{:,}'.format(cal_left) }} left{% endif %}</p>
       <p class="muted">of {{ '{:,}'.format(cal_target) }} kcal</p>
+      {% if eaten_burned %}<p class="muted eaten-burned">{{ eaten_burned }}</p>{% endif %}
       {% else %}
       <p class="cal-total"><span class="num">{{ '{:,}'.format(cal) }}</span> <span class="muted">kcal</span></p>
+      {% if eaten_burned %}<p class="muted eaten-burned">{{ eaten_burned }}</p>{% endif %}
       {% endif %}
       <div class="protein">
         {% if protein_target %}

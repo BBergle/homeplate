@@ -161,3 +161,40 @@ def test_users_do_not_see_each_others_data(client, login_as, monkeypatch):
     t = c2.get("/").text
     assert "secret-u1-meal" not in t and "777" not in t and "123.4" not in t
     assert "0 of 3" in c2.get("/me").text
+
+
+def pct():
+    con = db.connect()
+    try:
+        return con.execute("SELECT workout_pct FROM users").fetchone()[0]
+    finally:
+        con.close()
+
+
+SIX = {"weekly_goal": "3", "cal_target": "2000", "protein_target": "", "weight_goal": "", "delivery_cost": "25", "home_meal_cost": "6"}
+
+
+def test_workout_pct_setting(client):
+    assert pct() == 100
+    assert client.post("/settings", data=SIX).status_code == 200 and pct() == 100  # missing keeps the stored value
+    assert client.post("/settings", data=SIX | {"workout_pct": "75"}).status_code == 200 and pct() == 75
+    for bad in ("-1", "101", "abc", "", "7.5"):
+        r = client.post("/settings", data=SIX | {"workout_pct": bad, "weekly_goal": "5"})
+        assert 'role="alert"' in r.text and pct() == 75, bad
+    assert client.post("/settings", data=SIX).status_code == 200 and pct() == 75
+    assert 'name="workout_pct"' in client.get("/me").text
+
+
+def test_workout_pct_migration(data_dir):
+    import sqlite3
+
+    con = sqlite3.connect(data_dir / "homeplate.db")
+    con.execute("CREATE TABLE users (mealie_user_id TEXT PRIMARY KEY, name TEXT)")
+    con.execute("INSERT INTO users (mealie_user_id) VALUES ('old')")
+    con.commit()
+    con.close()
+    con = db.connect()
+    try:
+        assert con.execute("SELECT workout_pct FROM users").fetchone()[0] == 100
+    finally:
+        con.close()

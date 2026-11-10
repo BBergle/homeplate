@@ -38,3 +38,11 @@ def test_connect_creates_schema_twice(tmp_path, monkeypatch):
         con.close()
     assert "refreshed_at" in cols
     assert {"users", "sessions", "entries", "photos", "weights", "shares"} <= names
+
+
+def test_net_calories():
+    assert stats.net_calories(2000, 600, 100) == (600, 1400)
+    assert stats.net_calories(2000, 800, 75) == (600, 1400)
+    assert stats.net_calories(500, 900, 100) == (900, -400)
+    assert stats.net_calories(1000, 0, 100) == (0, 1000)
+    assert stats.net_calories(1000, 800, 0) == (0, 1000)

@@ -285,6 +285,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: var(--r-
 .kitchen .icon-chevron { margin-left: auto; }
 
 /* ---------- Me ---------- */
+fieldset .hint { margin: calc(-1 * var(--s-3)) 0 var(--s-4); font-size: var(--t-small); line-height: 1.35; }
 .goal-num { margin: 0; font: 700 var(--t-display)/1.05 var(--font-num); }
 .goal-sub { margin: var(--s-1) 0 var(--s-4); font-size: var(--t-small); }
 .goal-streak { margin: var(--s-4) 0 0; padding-top: var(--s-3); border-top: 1px solid var(--line); font-weight: 600; }

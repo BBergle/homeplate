@@ -96,7 +96,7 @@ def estimate_fragment(
     try:
         activity, intensity, mins = _parse(activity, intensity, minutes)
         ctx["value"] = estimate(activity, intensity, mins, lbs)
-        ctx["hint"] = f"Estimated from {mins} minutes at {intensity} effort and {lbs or 170:g} lb. Change it if you know better."
+        ctx["hint"] = f"Estimated from {mins} minute{'' if mins == 1 else 's'} at {intensity} effort and {lbs or 170:g} lb. Change it if you know better."
     except ValueError as e:
         ctx["error"] = str(e)
     ctx["has_weight"] = lbs is not None
@@ -105,6 +105,8 @@ def estimate_fragment(
 
 @router.post("/workouts/{workout_id}/delete")
 def delete_workout(workout_id: int, user=Depends(auth.current_user)):
+    if not 1 <= workout_id < 2**63:
+        raise HTTPException(404)
     con = db.connect()
     try:
         cur = con.execute("DELETE FROM workouts WHERE id = ? AND user_id = ?", (workout_id, user["mealie_user_id"]))

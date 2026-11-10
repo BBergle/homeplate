@@ -68,6 +68,8 @@
       <label>Calorie target <input type="number" name="cal_target" min="500" max="10000" step="1" inputmode="numeric" value="{{ v['cal_target'] }}"></label>
       <label>Protein target (g) <input type="number" name="protein_target" min="0" max="500" step="1" inputmode="numeric" value="{{ v['protein_target'] }}"></label>
       <label>Goal weight (lbs) <input type="number" name="weight_goal" min="50" max="1000" step="any" inputmode="decimal" value="{{ v['weight_goal'] }}"></label>
+      <label>Share of workout calories to count (%) <input type="number" name="workout_pct" min="0" max="100" step="1" inputmode="numeric" required value="{{ v['workout_pct'] }}" aria-describedby="workout-pct-hint"></label>
+      <p id="workout-pct-hint" class="muted hint">Estimates run high. Lower this if your weight stops moving.</p>
     </fieldset>
     <fieldset>
       <legend>Costs</legend>

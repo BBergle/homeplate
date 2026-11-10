@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     ai_provider TEXT,
     ai_key_enc TEXT,
     kroger_refresh_token_enc TEXT,
-    kroger_location_id TEXT
+    kroger_location_id TEXT,
+    workout_pct INTEGER NOT NULL DEFAULT 100
 );
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
@@ -71,6 +72,11 @@ CREATE TABLE IF NOT EXISTS shares (
 """
 
 
+def add_column_if_missing(con, table: str, column: str, ddl: str) -> None:
+    if column not in [r["name"] for r in con.execute(f"PRAGMA table_info({table})")]:
+        con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+
 def connect() -> sqlite3.Connection:
     data_dir = os.environ.get("DATA_DIR", "/data")
     os.makedirs(data_dir, exist_ok=True)
@@ -78,4 +84,5 @@ def connect() -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA)
+    add_column_if_missing(con, "users", "workout_pct", "INTEGER NOT NULL DEFAULT 100")
     return con
