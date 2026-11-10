@@ -8,6 +8,17 @@ router = APIRouter()
 REJECTED = "Couldn't create the account. The invite may have been used, or the username or email is taken."
 
 
+NAME_ERROR = "Give the household a name of 1 to 50 characters."
+
+
+def make_invite(token: str, where: str, household_name: str) -> str:
+    """Create the household when asked (ValueError on a bad name), then a single-use invite; returns its token."""
+    name = household_name.strip()
+    if where == "new" and not 1 <= len(name) <= 50:
+        raise ValueError(NAME_ERROR)
+    return mealie.create_invite(token, mealie.create_household(token, name) if where == "new" else None)
+
+
 def _page(request: Request, status: int = 200, **ctx):
     return auth.templates.TemplateResponse(request, "invite.html", ctx, status_code=status)
 
@@ -29,13 +40,11 @@ def create(request: Request, where: str = Form("mine"), household_name: str = Fo
     may, admin = _allowed(user)
     if not may or (where == "new" and not admin):
         return _page(request, 403, may=False, admin=admin)
-    name = household_name.strip()
-    if where == "new" and not 1 <= len(name) <= 50:
-        return _page(request, may=True, admin=admin, error="Give the household a name of 1 to 50 characters.")
-    token = user["mealie_token"]
-    household = mealie.create_household(token, name) if where == "new" else None
-    invite = mealie.create_invite(token, household)
-    return _page(request, may=True, admin=admin, link=f"{auth.base_url(request)}/join/{invite}")
+    try:
+        link = f"{auth.base_url(request)}/join/{make_invite(user['mealie_token'], where, household_name)}"
+    except ValueError:
+        return _page(request, may=True, admin=admin, error=NAME_ERROR)
+    return _page(request, may=True, admin=admin, link=link)
 
 
 def _join(request: Request, token: str, error: str | None = None, **values):

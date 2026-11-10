@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from app import auth, gallery, invite, me, mealie, share, today, workouts
+from app import access, auth, gallery, invite, me, mealie, today, workouts
 
 MAX_BODY = 20 * 1024 * 1024
 
@@ -82,17 +82,21 @@ app.include_router(today.router)
 app.include_router(workouts.router)
 app.include_router(me.router)
 app.include_router(gallery.router)
-app.include_router(share.router)
 app.include_router(invite.router)
+app.include_router(access.router)
+
+
+def _is_public_form(path: str) -> bool:
+    return path.startswith(("/join/", "/request/")) or path == "/request"
 
 
 @app.middleware("http")
 async def public_headers(request: Request, call_next):
     resp = await call_next(request)
-    if request.url.path.startswith(("/s/", "/join/")):
+    if _is_public_form(request.url.path):
         resp.headers["X-Robots-Tag"] = "noindex"
-        # /join/ has a form: no-referrer would make browsers send `Origin: null`, which SameOrigin blocks
-        resp.headers["Referrer-Policy"] = "same-origin" if request.url.path.startswith("/join/") else "no-referrer"
+        # public forms: no-referrer would make browsers send `Origin: null`, which SameOrigin blocks
+        resp.headers["Referrer-Policy"] = "same-origin"
         resp.headers["Content-Security-Policy"] = (
             "default-src 'self'; img-src 'self'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
         )
@@ -105,11 +109,16 @@ def mealie_auth_error(request: Request, exc):
     return auth.drop_session(request)
 
 
+@app.exception_handler(access.NotAdmin)
+def not_admin(request: Request, exc):
+    return auth.templates.TemplateResponse(request, "admin.html", {"forbidden": True}, status_code=403)
+
+
 @app.exception_handler(mealie.MealieError)
 def mealie_error(request: Request, exc):
     if request.headers.get("HX-Request"):
         return HTMLResponse('<p class="msg msg-error" role="alert">Can\'t reach Mealie</p>')
-    page = "public_error.html" if request.url.path.startswith(("/s/", "/join/")) else "error.html"
+    page = "public_error.html" if _is_public_form(request.url.path) else "error.html"
     return auth.templates.TemplateResponse(request, page, {}, status_code=502)
 
 

@@ -1,0 +1,18 @@
+{% extends "public.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Request an account{% endblock %}
+{% block content %}
+<div class="login">
+  <h1 class="wordmark">{{ icon("plate") }}homeplate</h1>
+  <h2 class="tagline">Request an account</h2>
+  <form method="post" action="/request" class="card">
+    {% if error %}<p class="msg msg-error" role="alert">{{ error }}</p>{% endif %}
+    <label class="field">Name <input name="name" autocomplete="name" enterkeyhint="next" maxlength="100" required value="{{ v.get('name', '') }}"></label>
+    <label class="field">Email <input name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" enterkeyhint="next" maxlength="254" required value="{{ v.get('email', '') }}"></label>
+    <label class="field">Note (optional) <input name="note" maxlength="200" enterkeyhint="go" value="{{ v.get('note', '') }}"></label>
+    <button class="btn btn-primary">Request account</button>
+    <p class="hint muted">An admin will review your request. You'll choose your password after you're approved.</p>
+  </form>
+  <a class="btn btn-secondary" href="/login">Back to sign in</a>
+</div>
+{% endblock %}

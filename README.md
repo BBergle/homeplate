@@ -14,20 +14,40 @@ homeplate is on http://localhost:8000 (`/healthz`), Mealie on http://localhost:9
 | --- | --- |
 | `MEALIE_URL` | Where homeplate reaches Mealie (default `http://mealie:9000`). |
 | `MEALIE_PUBLIC_URL` | Mealie address your browser can open, used for links. |
-| `SECRET_KEY` | Unused until the AI step. |
-| `BASE_URL` | homeplate's public URL; `https` turns on the cookie `Secure` flag. Form posts are accepted only from this address or the address the request arrived on. |
+| `SECRET_KEY` | Signs the private status links for account requests. Set a long random value and keep it the same. |
+| `BASE_URL` | homeplate's real public address, such as `https://plate.example.com`. An `https` address turns on the cookie `Secure` flag. It is the address used in recipe and join links. Form posts are accepted only from this address or the address the request arrived on. |
 | `TZ` | Time zone that decides what "today" is (default `UTC`). |
 | `DATA_DIR` | Where the database and photos live (default `/data`). |
 
 ## Sharing
 
-Any signed-in user can create a public link for a recipe from its gallery page (`/r/<id>`). Anyone with the link, no account needed, sees the recipe and everyone's non-private photos of it, nothing about who cooked it. "Stop sharing" kills the link. No extra Mealie setup is needed.
+Nothing in homeplate is public: only people with an account can see any recipe, photo or user detail. The recipe page (`/r/<id>`) shows the full recipe and everyone's non-private photos. Its "Link to this recipe" card is an ordinary link; without an account it leads to the sign-in screen and, after signing in, back to that recipe.
 
-A share link's token is a Mealie share token. If Mealie itself is reachable from the internet, someone holding a share link who knows the Mealie address can read that recipe's full Mealie record (including the names of people who commented on it) through Mealie's own API.
+## Accounts
 
-## Invites
+Nothing is public: new people need an account. Admins, and users Mealie lets invite (the "can invite" permission), can create an invite link at `/invite`, for their own household or, for admins, a new one. The link opens a public form at `/join/<token>`; it is single-use and creates a Mealie account, then signs the new user in.
 
-Admins, and users Mealie lets invite (the "can invite" permission), can create an invite link at `/invite`, for their own household or, for admins, a new one. The link opens a public form at `/join/<token>`; it is single-use and creates a Mealie account, then signs the new user in. Mealie's own open sign-up can stay off.
+An admin can also switch on account requests (Me, then Admin; off by default). While it is on, the sign-in screen shows "Create account", which asks for a name, email and optional note, never a password. The requester gets a private status page; an admin approves (choosing the household) or declines each request on `/admin`. Approval creates a single-use invite and the status page then leads into the join form. Mealie's own open sign-up can stay off.
+
+Anyone can type any name and email into the request form, and homeplate does not check them. Before you approve, check with the person that the request is really theirs. Otherwise a stranger could get an account in someone else's name.
+
+While account requests are on, at most 20 requests can wait at once. Further requests are silently ignored until you decide some. Turn the switch off when you are not expecting anyone.
+
+## Deploying
+
+- Set `SECRET_KEY` to a long random value and do not change it. If it changes, a "request sent" page for a request that was never stored stops opening. Real requests keep working.
+- Set `BASE_URL` to the real https address.
+- Keep Mealie's own `ALLOW_SIGNUP` switched off.
+- "Nothing is public" covers homeplate only. Mealie serves recipe images by id without a sign-in. If that matters to you, keep Mealie itself off the public internet. Only homeplate, and people on your network or VPN, should be able to reach it.
+
+## Upgrading
+
+- Older versions had public share links. They created Mealie share tokens that are valid for ten years, and this version no longer tracks them. They can still be opened through Mealie's own address. To remove them, list them and delete each one with Mealie's API. Replace `MEALIE`, `TOKEN` and `ID`:
+
+      curl -H "Authorization: Bearer TOKEN" MEALIE/api/shared/recipes
+      curl -X DELETE -H "Authorization: Bearer TOKEN" MEALIE/api/shared/recipes/ID
+
+- An admin who is already signed in sees the Admin button only after signing out and in again. They can also open `/admin` directly.
 
 ## Tests
 

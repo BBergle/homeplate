@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
     ai_key_enc TEXT,
     kroger_refresh_token_enc TEXT,
     kroger_location_id TEXT,
+    is_admin INTEGER NOT NULL DEFAULT 0,
     workout_pct INTEGER NOT NULL DEFAULT 100
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -51,6 +52,20 @@ CREATE TABLE IF NOT EXISTS weights (
     lbs REAL NOT NULL,
     PRIMARY KEY (user_id, date)
 );
+DROP TABLE IF EXISTS shares;
+CREATE TABLE IF NOT EXISTS instance (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    secret TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    note TEXT,
+    status TEXT NOT NULL CHECK (status IN ('pending','approved','declined')),
+    invite_token TEXT,
+    created_at TEXT NOT NULL,
+    decided_at TEXT,
+    decided_by TEXT
+);
 CREATE TABLE IF NOT EXISTS workouts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
@@ -61,12 +76,6 @@ CREATE TABLE IF NOT EXISTS workouts (
     calories INTEGER NOT NULL,
     source TEXT NOT NULL CHECK (source IN ('entered','estimated')),
     note TEXT,
-    created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS shares (
-    token TEXT PRIMARY KEY,
-    recipe_id TEXT NOT NULL UNIQUE,
-    created_by TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 """
@@ -84,5 +93,6 @@ def connect() -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA)
+    add_column_if_missing(con, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing(con, "users", "workout_pct", "INTEGER NOT NULL DEFAULT 100")
     return con

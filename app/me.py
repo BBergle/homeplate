@@ -70,6 +70,9 @@ def _page(request, user, error=None):
             "SELECT date, lbs FROM weights WHERE user_id = ? AND date >= ? ORDER BY date",
             (uid, (t - timedelta(days=90)).isoformat()),
         ).fetchall()
+        pending = (
+            con.execute("SELECT COUNT(*) FROM requests WHERE status = 'pending'").fetchone()[0] if user["is_admin"] else 0
+        )
     finally:
         con.close()
     days = [date.fromisoformat(m["day"]) for m in meals]
@@ -91,6 +94,7 @@ def _page(request, user, error=None):
     sp = sparkline(points, goal=user["weight_goal"])
     ctx = {
         "user": user,
+        "pending": pending,
         "error": error,
         "week_count": totals[-1],
         "week_extra": max(0, totals[-1] - goal),
