@@ -368,3 +368,4 @@ legend { padding: 0; margin: 0 0 var(--s-3); font-size: var(--t-h2); font-weight
 .req form { margin: var(--s-4) 0 0; }
 .req .field { margin: 0; }
 .login > .btn { display: flex; margin-top: var(--s-3); }
+.login > .empty { margin-top: var(--s-5); }
