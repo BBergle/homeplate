@@ -74,6 +74,30 @@ def test_chat_keeps_sources_mid_sentence(mock_ai):
     assert ai.chat("k", "m", [])["text"] == "Good protein sources: eggs and beans."
 
 
+SIMPLY = ("Simply Recipes rolls are pillowy, with tips like freezing unbaked or baked rolls.\n\n"
+          "Source: Simply Recipes, Best Homemade Cinnamon Rolls Recipe\nhttps://www.simplyrecipes.com/recipes/bakery_style_cinnamon_rolls")
+
+
+def test_chat_strips_singular_source_with_text_and_bare_url(mock_ai):
+    mock_ai[CHAT] = reply(SIMPLY, [cite("https://www.simplyrecipes.com/recipes/bakery_style_cinnamon_rolls")])
+    assert ai.chat("k", "m", [])["text"].endswith("unbaked or baked rolls.") and "Source" not in ai.chat("k", "m", [])["text"]
+
+
+def test_chat_keeps_source_word_without_colon(mock_ai):
+    mock_ai[CHAT] = reply("Sources of protein include eggs.", [cite("https://k.com/r")])
+    assert ai.chat("k", "m", [])["text"] == "Sources of protein include eggs."
+
+
+def test_chat_removes_url_only_lines_but_not_inline_urls(mock_ai):
+    mock_ai[CHAT] = reply("Intro.\n- https://a.com/x\nSee https://b.com/y for more.\n\u2022 https://c.com/z\nEnd.", [cite("https://k.com/r")])
+    assert ai.chat("k", "m", [])["text"] == "Intro.\nSee https://b.com/y for more.\nEnd."
+
+
+def test_chat_keeps_source_block_and_urls_without_sources(mock_ai):
+    mock_ai[CHAT] = reply(SIMPLY)
+    assert ai.chat("k", "m", [])["text"] == SIMPLY
+
+
 def test_chat_only_sources_block_is_blank_error(mock_ai):
     mock_ai[CHAT] = reply("Sources:\n- King Arthur", [cite("https://k.com/r")])
     with pytest.raises(ai.AIError, match="didn't answer"):

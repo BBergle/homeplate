@@ -120,7 +120,8 @@ def chat(key: str, model: str, messages: list[dict]) -> dict:
             seen.add(url)
             sources.append({"url": url, "title": c.get("title") or urlsplit(url).hostname})
     if sources:  # the model often ends with its own "Sources" list; the real links are shown under the answer
-        text = re.sub(r"(?ims)^[ \t]*sources:?[ \t]*$.*", "", text).strip()
+        text = re.sub(r"(?ims)^[ \t]*sources?[ \t]*(?::|$).*", "", text)
+        text = re.sub(r"(?m)^[ \t]*(?:[-*\u2022][ \t]*)?https?://\S+[ \t]*$\n?", "", text).strip()
     if not text:
         if choice.get("finish_reason") == "length":
             raise AIError("The answer was cut off. Ask again, or ask for something shorter.")
