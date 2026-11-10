@@ -90,7 +90,8 @@ async def public_headers(request: Request, call_next):
     resp = await call_next(request)
     if request.url.path.startswith(("/s/", "/join/")):
         resp.headers["X-Robots-Tag"] = "noindex"
-        resp.headers["Referrer-Policy"] = "no-referrer"
+        # /join/ has a form: no-referrer would make browsers send `Origin: null`, which SameOrigin blocks
+        resp.headers["Referrer-Policy"] = "same-origin" if request.url.path.startswith("/join/") else "no-referrer"
     return resp
 
 

@@ -163,10 +163,27 @@ def test_join_is_public(mock_mealie):  # no Mealie call, no cookie
     for s in ('autocomplete="name"', 'autocomplete="email"', 'autocomplete="username"', 'autocomplete="new-password"', 'action="/join/tok9"'):
         assert s in r.text
     assert 'class="tabs"' not in r.text and 'name="robots"' in r.text
-    assert r.headers["x-robots-tag"] == "noindex" and r.headers["referrer-policy"] == "no-referrer"
+    assert r.headers["x-robots-tag"] == "noindex" and r.headers["referrer-policy"] == "same-origin"
+    # Regression: a no-referrer page makes browsers send `Origin: null` on the form post, which the
+    # same-origin guard (rightly) blocks, so the join form would 403 in a real browser.
+    assert r.headers["referrer-policy"] != "no-referrer"
 
 
 def test_join_post_carries_public_headers(mock_mealie):
     mock_mealie[REG] = httpx.Response(400, json={})
     r = TestClient(app).post("/join/tok9", data=FORM)
-    assert r.headers["x-robots-tag"] == "noindex" and r.headers["referrer-policy"] == "no-referrer"
+    assert r.headers["x-robots-tag"] == "noindex" and r.headers["referrer-policy"] == "same-origin"
+
+
+def test_join_length_limits(mock_mealie):
+    mock_mealie[REG] = httpx.Response(201, json={})
+    mock_mealie[("POST", "/api/auth/token")] = httpx.Response(401, json={})
+    c = TestClient(app)
+    long_email = "a" * 250 + "@x.io"
+    r = c.post("/join/tok9", data=FORM | {"email": long_email})
+    assert "Enter a valid email address." in r.text and long_email not in r.text
+    long_pw = "p" * 201
+    r = c.post("/join/tok9", data=FORM | {"password": long_pw, "password_confirm": long_pw})
+    assert "Password must be 8 to 200 characters." in r.text and long_pw not in r.text
+    ok = "e" * 248 + "@x.io"  # 253 chars
+    assert c.post("/join/tok9", data=FORM | {"email": ok}, follow_redirects=False).status_code != 200

@@ -122,7 +122,7 @@ def add_entry(
                 path = photos.save(data)
                 con.execute(
                     "INSERT INTO photos (entry_id, user_id, recipe_id, path, private, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (cur.lastrowid, user["mealie_user_id"], recipe_id, path, 0 if show_photo else 1, now),
+                    (cur.lastrowid, user["mealie_user_id"], recipe_id, path, 0 if show_photo and recipe_id else 1, now),
                 )
             except ValueError as e:
                 error = (
@@ -157,10 +157,13 @@ def delete_entry(entry_id: int, user=Depends(auth.current_user)):
 
 @router.get("/photos/{photo_id}")
 def photo(photo_id: int, user=Depends(auth.current_user)):
+    if not 1 <= photo_id < 2**63:
+        raise HTTPException(404)
     con = db.connect()
     try:
         row = con.execute(
-            "SELECT path FROM photos WHERE id = ? AND (private = 0 OR user_id = ?)", (photo_id, user["mealie_user_id"])
+            "SELECT path FROM photos WHERE id = ? AND (user_id = ? OR (private = 0 AND recipe_id IS NOT NULL))",
+            (photo_id, user["mealie_user_id"]),
         ).fetchone()
     finally:
         con.close()
@@ -172,12 +175,14 @@ def photo(photo_id: int, user=Depends(auth.current_user)):
 
 @router.post("/photos/{photo_id}/private")
 def toggle_private(photo_id: int, user=Depends(auth.current_user)):
+    if not 1 <= photo_id < 2**63:
+        raise HTTPException(404)
     con = db.connect()
     try:
         row = con.execute(
             "SELECT recipe_id FROM photos WHERE id = ? AND user_id = ?", (photo_id, user["mealie_user_id"])
         ).fetchone()
-        if not row:
+        if not row or row["recipe_id"] is None:
             raise HTTPException(404)
         con.execute("UPDATE photos SET private = 1 - private WHERE id = ?", (photo_id,))
         con.commit()

@@ -13,7 +13,7 @@ def _page(request: Request, status: int = 200, **ctx):
 
 
 def _allowed(user: dict):
-    """Live permission check: (me, may_invite, is_admin)."""
+    """Live permission check: (may_invite, is_admin)."""
     me = mealie.me(user["mealie_token"])
     return me.get("admin", False) or me.get("canInvite", False), me.get("admin", False)
 
@@ -55,13 +55,13 @@ def join(
     name, email, username = name.strip(), email.strip(), username.strip()
     error = (
         "Enter your name (up to 100 characters)." if not 1 <= len(name) <= 100
-        else "Enter a valid email address." if "@" not in email
+        else "Enter a valid email address." if "@" not in email or len(email) > 254
         else "Choose a username (up to 50 characters)." if not 1 <= len(username) <= 50
-        else "Password must be at least 8 characters." if len(password) < 8
+        else "Password must be 8 to 200 characters." if not 8 <= len(password) <= 200
         else "The two passwords don't match." if password != password_confirm
         else None
     )
-    kept = {"name": name, "email": email, "username": username}
+    kept = {"name": name, "email": email if len(email) <= 254 else "", "username": username}  # over-long email is not echoed
     if error:
         return _join(request, token, error, **kept)
     try:

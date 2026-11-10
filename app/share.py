@@ -37,12 +37,13 @@ def create(request: Request, recipe_id: str, user=Depends(auth.current_user)):
 
 @router.post("/r/{recipe_id}/unshare")
 def remove(request: Request, recipe_id: str, user=Depends(auth.current_user)):
-    r, notfound = _recipe_or_404(request, user, recipe_id)
-    if notfound:
-        return notfound
+    try:
+        recipe_id = mealie.recipe(user["mealie_token"], recipe_id)["id"]
+    except mealie.MealieNotFound:  # recipe deleted in Mealie: the posted value may still be the stored recipe id
+        pass
     con = db.connect()
     try:
-        row = con.execute("SELECT token FROM shares WHERE recipe_id = ?", (r["id"],)).fetchone()
+        row = con.execute("SELECT token FROM shares WHERE recipe_id = ?", (recipe_id,)).fetchone()
         if row:
             mealie.delete_share(user["mealie_token"], row["token"])
             con.execute("DELETE FROM shares WHERE token = ?", (row["token"],))
@@ -72,6 +73,12 @@ def page(request: Request, token: str):
     try:
         r = mealie.shared_recipe(token)
     except (mealie.MealieNotFound, mealie.MealieRejected, mealie.MealieAuthError):  # never send a public visitor to /login
+        con = db.connect()  # the share is dead in Mealie: stop serving its photos and image too
+        try:
+            con.execute("DELETE FROM shares WHERE token = ?", (token,))
+            con.commit()
+        finally:
+            con.close()
         return _gone(request)
     con = db.connect()
     try:
@@ -91,6 +98,8 @@ def page(request: Request, token: str):
 
 @router.get("/s/{token}/photo/{photo_id}")
 def photo(token: str, photo_id: int):
+    if not 1 <= photo_id < 2**63:
+        raise HTTPException(404)
     con = db.connect()
     try:
         row = con.execute(

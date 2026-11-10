@@ -5,7 +5,7 @@
 {% if recipe.get("image") %}<img class="hero" src="/s/{{ token }}/image" alt="">{% endif %}
 {% if recipe.get("description") %}<p>{{ recipe["description"] }}</p>{% endif %}
 <p class="muted">
-  {% if recipe.get("recipeServings") %}Serves {{ recipe["recipeServings"] }}{% endif %}
+  {% if recipe.get("recipeServings") %}Serves {{ recipe["recipeServings"] | int if recipe["recipeServings"] == recipe["recipeServings"] | int else recipe["recipeServings"] }}{% endif %}
   {% if recipe.get("totalTime") %} · {{ recipe["totalTime"] }}{% endif %}
   {% if calories %} · {{ calories }} kcal{% endif %}
   {% if protein %} · {{ protein }} g protein{% endif %}
