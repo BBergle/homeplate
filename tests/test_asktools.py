@@ -69,3 +69,36 @@ def test_recipe_cards(mock_mealie):
 def test_recipe_cards_bad_args(mock_mealie, args):
     assert asktools.recipe_cards(args, "t")[1] == []
     assert asktools.recipe_cards(args, "t")[0] == ""
+
+
+def test_recipe_cards_private_image_dropped(mock_mealie):
+    mock_mealie[SCRAPE] = httpx.Response(200, json={"name": "P", "image": "https://10.0.0.1/i.jpg", "recipeIngredient": ["a"]})
+    _, cards = asktools.recipe_cards({"recipes": [{"name": "P", "url": "https://a.example/r", "why": "w"}]}, "t")
+    assert cards[0]["image"] is None
+
+
+@pytest.mark.parametrize("scraped,given,want", [(["x"], "Given", "Given"), (None, "  ", "a.example"), (["x"], None, "a.example")])
+def test_recipe_cards_odd_names(mock_mealie, scraped, given, want):
+    mock_mealie[SCRAPE] = httpx.Response(200, json={"name": scraped, "recipeIngredient": ["a"]})
+    _, cards = asktools.recipe_cards({"recipes": [{"name": given, "url": "https://www.a.example/r", "why": "w"}]}, "t")
+    assert cards[0]["name"] == want
+
+
+def test_get_recipe_cuts_long_text(mock_mealie):
+    mock_mealie[("GET", "/api/recipes/i0")] = httpx.Response(200, json={
+        "name": "R", "recipeIngredient": [{"display": "x" * 900}], "recipeInstructions": [{"text": "y" * 900}], "nutrition": {}})
+    r = asktools.lookup("get_recipe", {"id": "i0"}, "t")
+    assert len(r["ingredients"][0]) == 500 and len(r["steps"][0]) == 500
+
+
+def test_lookup_non_string_args(mock_mealie):
+    seen = []
+
+    def search(request):
+        seen.append(request.url.params["search"])
+        return httpx.Response(200, json={"items": []})
+
+    mock_mealie[SEARCH] = search
+    mock_mealie[("GET", "/api/recipes/['a/b']")] = httpx.Response(404, json={})
+    assert asktools.lookup("search_my_recipes", {"query": 5}, "t") == {"recipes": []} and seen == ["5"]
+    assert asktools.lookup("get_recipe", {"id": ["a/b"]}, "t") == {"error": "the recipe library could not be reached"}

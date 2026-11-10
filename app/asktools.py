@@ -51,8 +51,8 @@ def lookup(name: str, args: dict, token: str) -> dict:
             n = r.get("nutrition") or {}
             return {
                 "name": r.get("name"),
-                "ingredients": [x for x in map(_line, r.get("recipeIngredient") or []) if x][:40],
-                "steps": [s["text"] for s in r.get("recipeInstructions") or [] if isinstance(s, dict) and s.get("text")][:40],
+                "ingredients": [x[:500] for x in map(_line, r.get("recipeIngredient") or []) if x][:40],
+                "steps": [str(s["text"])[:500] for s in r.get("recipeInstructions") or [] if isinstance(s, dict) and s.get("text")][:40],
                 "calories": n.get("calories"),
                 "protein": n.get("proteinContent"),
             }
@@ -78,11 +78,13 @@ def recipe_cards(args: dict, token: str) -> tuple[str, list[dict]]:
         seen.add(url)
         # ponytail: pages are scraped one after another; parallelise if five cards feel slow
         scrape = mealie.test_scrape(token, url)
-        name = (scrape or {}).get("name") or str(item.get("name") or "")
+        host = (urlsplit(url).hostname or "").removeprefix("www.")
+        scraped, given = (scrape or {}).get("name"), item.get("name")
+        name = next((n.strip() for n in (scraped, given) if isinstance(n, str) and n.strip()), host)
         cards.append({
-            "name": name.strip()[:120],
+            "name": name[:120],
             "url": url,
-            "host": (urlsplit(url).hostname or "").removeprefix("www."),
+            "host": host,
             "why": str(item.get("why") or "").strip()[:200],
             "importable": bool(scrape and scrape["ingredients"] > 0),
             "image": webimg.public_https(scrape["image"]) if scrape and scrape["image"] else None,

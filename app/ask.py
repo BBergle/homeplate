@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
-from app import ai, asktools, auth, db, me, today, webimg
+from app import ai, asktools, auth, db, me, mealie, today, webimg
 
 router = APIRouter()
 
@@ -65,15 +65,22 @@ def _to_ask(request):
 
 def _answer(row_id: int, uid: str, key: str, model: str, token: str, messages: list[dict]) -> None:
     msgs = list(messages)
+    cards: list[dict] = []
+    photos: list[bytes | None] = []
     try:
         text, sources, error = "That took too many steps. Ask again more simply.", None, 1
         for _ in range(ROUNDS):
             r = ai.chat(key, model, msgs, tools=asktools.TOOLS)
             proposal = next((c for c in r["calls"] if c["name"] == "propose_recipes"), None)
             if proposal:
-                intro, cards = asktools.recipe_cards(proposal["args"], token)
+                try:
+                    intro, cards = asktools.recipe_cards(proposal["args"], token)
+                except (mealie.MealieError, mealie.MealieAuthError):
+                    text, sources, error = "Can't reach your recipe library to check those recipes. Try again.", None, 1
+                    break
                 if cards:
-                    _store_cards(row_id, uid, cards)
+                    # ponytail: photos are fetched one after another, before any database write; parallelise if five cards feel slow
+                    photos = [webimg.thumbnail(c["image"]) if c["image"] else None for c in cards]
                     text, sources, error = intro or "Here is what I found.", None, 0
                 else:
                     text, sources, error = "I found recipes but couldn't read their pages. Ask again.", None, 1
@@ -84,36 +91,42 @@ def _answer(row_id: int, uid: str, key: str, model: str, token: str, messages: l
             msgs.append(r["message"])
             msgs += [{"role": "tool", "tool_call_id": c["id"], "content": json.dumps(asktools.lookup(c["name"], c["args"], token))} for c in r["calls"]]
     except ai.AIError as e:
-        text, sources, error = str(e), None, 1
+        text, sources, error, cards = str(e), None, 1, []
     except Exception:
-        text, sources, error = FAILED, None, 1
+        text, sources, error, cards = FAILED, None, 1, []
+    ids = []
     con = db.connect()
-    try:
+    try:  # one short transaction: no network happens while it is open
+        for c, jpg in zip(cards, photos):
+            payload = {k: v for k, v in c.items() if k != "image"} | {"photo": bool(jpg)}
+            ids.append(con.execute(
+                "INSERT INTO proposals (user_id, message_id, kind, payload, created_at) VALUES (?, ?, 'recipe', ?, ?)",
+                (uid, row_id, json.dumps(payload), _now().isoformat()),
+            ).lastrowid)
         con.execute("UPDATE chat_messages SET content = ?, sources = ?, error = ? WHERE id = ?", (text, sources, error, row_id))
         con.commit()
+        for pid, c, jpg in zip(ids, cards, photos):
+            if jpg and not _write_photo(pid, jpg):  # a card must never claim a photo it does not have
+                payload = {k: v for k, v in c.items() if k != "image"} | {"photo": False}
+                con.execute("UPDATE proposals SET payload = ? WHERE id = ?", (json.dumps(payload), pid))
+                con.commit()
     finally:
         con.close()
 
 
-def _store_cards(row_id: int, uid: str, cards: list[dict]) -> None:
-    os.makedirs(asktools.photos_dir(), exist_ok=True)
-    con = db.connect()
+def _write_photo(pid: int, jpg: bytes) -> bool:
+    path = os.path.join(asktools.photos_dir(), f"{pid}.jpg")
     try:
-        for c in cards:
-            image = c.pop("image")
-            cur = con.execute(
-                "INSERT INTO proposals (user_id, message_id, kind, payload, created_at) VALUES (?, ?, 'recipe', ?, ?)",
-                (uid, row_id, "{}", _now().isoformat()),
-            )
-            # ponytail: photos are fetched one after another; photo files of expired cards are only removed by New chat
-            jpg = webimg.thumbnail(image) if image else None
-            if jpg:
-                with open(os.path.join(asktools.photos_dir(), f"{cur.lastrowid}.jpg"), "wb") as f:
-                    f.write(jpg)
-            con.execute("UPDATE proposals SET payload = ? WHERE id = ?", (json.dumps(c | {"photo": bool(jpg)}), cur.lastrowid))
-        con.commit()
-    finally:
-        con.close()
+        os.makedirs(asktools.photos_dir(), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(jpg)
+        return True
+    except OSError:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        return False
 
 
 def _shown(uid: str) -> dict[int, str]:

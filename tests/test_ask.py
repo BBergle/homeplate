@@ -390,3 +390,80 @@ def test_system_prompt_mentions_cards(ai_client, mock_ai):
     bodies = sequence(mock_ai, reply("ok"))
     ai_client.post("/ask", data={"message": "hi"}, headers=HX)
     assert "propose_recipes" in bodies[0]["messages"][0]["content"]
+
+
+def test_proposal_wins_over_lookup_in_same_reply(ai_client, mock_ai, scrape_ok, fake_web):
+    calls = json.loads(PROPOSE.content)["choices"][0]["message"]["tool_calls"] + [
+        {"id": "c2", "type": "function", "function": {"name": "search_my_recipes", "arguments": '{"query": "x"}'}}]
+    msg = {"role": "assistant", "content": None, "tool_calls": calls[1:] + calls[:1]}  # look-up listed first
+    bodies = sequence(mock_ai, httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls", "message": msg}]}))
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    assert len(bodies) == 1 and rows()[-1]["content"] == "Here are two." and len(proposals()) == 2
+
+
+def test_private_image_is_never_fetched(ai_client, mock_ai, mock_mealie, fake_web, monkeypatch):
+    from app import webimg
+
+    fetched = []
+    monkeypatch.setattr(webimg, "thumbnail", lambda u: fetched.append(u))
+    mock_mealie[("POST", "/api/recipes/test-scrape-url")] = httpx.Response(200, json={"image": "https://10.0.0.1/i.jpg", "recipeIngredient": ["x"]})
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    assert fetched == [] and json.loads(proposals()[0]["payload"])["photo"] is False
+
+
+def test_no_database_write_while_fetching_photos(ai_client, mock_ai, scrape_ok, fake_web, monkeypatch):
+    from app import webimg
+
+    def thumb(url):
+        con = db.connect()  # a second writer must not be blocked by an open transaction
+        con.execute("PRAGMA busy_timeout = 0")
+        con.execute("INSERT INTO chat_messages (user_id, role, content, created_at) VALUES ('u1', 'user', 'x', 'now')")
+        con.commit()
+        con.close()
+        return b"jpg"
+
+    monkeypatch.setattr(webimg, "thumbnail", thumb)
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    assert len(proposals()) == 2
+
+
+def test_photo_write_failure_clears_photo_flag(ai_client, mock_ai, scrape_ok, fake_web, data_dir):
+    (data_dir / "cards").write_text("in the way")  # the folder cannot be made
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    a, b = proposals()
+    assert rows()[-1]["content"] == "Here are two." and json.loads(a["payload"])["photo"] is False
+
+
+@pytest.mark.parametrize("status", [500, 401])
+def test_mealie_down_while_building_cards(ai_client, mock_ai, mock_mealie, fake_web, status):
+    mock_mealie[("POST", "/api/recipes/test-scrape-url")] = httpx.Response(status, json={})
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    last = rows()[-1]
+    assert last["content"] == "Can't reach your recipe library to check those recipes. Try again." and last["error"] == 1 and proposals() == []
+
+
+def test_new_chat_deletes_proposals_and_photos(ai_client, mock_ai, scrape_ok, fake_web, data_dir):
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    pid = proposals()[0]["id"]
+    assert (data_dir / "cards" / f"{pid}.jpg").exists()
+    ai_client.post("/ask/new", follow_redirects=False)
+    assert proposals() == [] and not (data_dir / "cards" / f"{pid}.jpg").exists()
+
+
+def test_shown_notes_are_per_person(ai_client, mock_ai, scrape_ok, fake_web):
+    bodies = sequence(mock_ai, reply("A1"), reply("A2"))
+    ai_client.post("/ask", data={"message": "Q1"}, headers=HX)
+    mid = rows()[-1]["id"]
+    con = db.connect()
+    con.execute("PRAGMA foreign_keys = OFF")
+    con.execute("INSERT INTO proposals (user_id, message_id, kind, payload, created_at) VALUES ('u2', ?, 'recipe', ?, 'now')",
+                (mid, json.dumps({"name": "Other", "url": "https://o.example/r"})))
+    con.commit()
+    con.close()
+    ai_client.post("/ask", data={"message": "Q2"}, headers=HX)
+    assert bodies[1]["messages"][2] == {"role": "assistant", "content": "A1"}
