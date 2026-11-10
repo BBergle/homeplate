@@ -20,6 +20,13 @@ def png(size=(1200, 800)):
     ("http://site.example/a", PUBLIC, "https://site.example/a"),
     ("https://site.example/a", PRIVATE, None), ("https://site.example/a", PUBLIC + PRIVATE, None),
     ("https://site.example/a", ["127.0.0.1"], None), ("https://site.example/a", ["169.254.169.254"], None),
+    ("https://site.example/a", ["::ffff:127.0.0.1"], None), ("https://site.example/a", ["::ffff:10.0.0.5"], None),
+    ("https://site.example/a", ["64:ff9b::7f00:1"], None), ("https://site.example/a", ["64:ff9b::a00:5"], None),
+    ("https://site.example/a", ["::127.0.0.1"], None), ("https://site.example/a", ["fec0::1"], None),
+    ("https://site.example/a", ["224.0.0.1"], None), ("https://site.example/a", ["ff02::1"], None),
+    ("https://site.example/a", ["0.0.0.0"], None), ("https://site.example/a", ["::"], None),
+    ("https://site.example/a", ["100.64.0.1"], None), ("https://site.example/a", ["fe80::1%en0"], None),
+    ("https://site.example/a", ["2606:4700::1111"], "https://site.example/a"),
     ("https://site.example/a", ["::1"], None), ("https://site.example/a", ["fd00::1"], None), ("https://site.example/a", [], None),
     ("https://192.168.1.1/a", PUBLIC, None), ("https://93.184.216.34/a", PUBLIC, None), ("https://localhost/a", ["127.0.0.1"], None),
     ("https://user:pw@site.example/a", PUBLIC, None), ("https://site.example:8443/a", PUBLIC, None),
@@ -34,7 +41,7 @@ def test_public_https(monkeypatch, url, addrs, ok):
 def net(monkeypatch):
     """hosts table + handler hook; returns a list of (ip, host, sni) seen."""
     hosts = {"site.example": PUBLIC, "cdn.example": ["93.184.216.35"], "evil.example": PRIVATE}
-    seen, state = [], {"handler": None, "clients": 0}
+    seen, state = [], {"handler": None, "clients": 0, "kw": [], "accept": []}
 
     def resolve(host):
         if host not in hosts:
@@ -42,6 +49,7 @@ def net(monkeypatch):
         return hosts[host]
 
     def handler(request):
+        state["accept"].append(request.headers["accept-encoding"])
         seen.append((request.url.host, request.headers["host"], request.extensions["sni_hostname"]))
         return state["handler"](request)
 
@@ -49,6 +57,7 @@ def net(monkeypatch):
 
     def client(**kw):
         state["clients"] += 1
+        state["kw"].append(kw)
         return real_client(**kw)
 
     monkeypatch.setattr(webimg, "resolve", resolve)
@@ -119,3 +128,22 @@ def test_thumbnail_uses_a_new_client_each_time(net):
     webimg.thumbnail("https://site.example/a")
     webimg.thumbnail("https://site.example/a")
     assert state["clients"] == 2
+    assert all(k["trust_env"] is False for k in state["kw"])
+    assert state["accept"] == ["identity", "identity"]
+
+
+def test_thumbnail_connects_to_the_address_that_was_checked(net, monkeypatch):
+    seen, state = net
+    answers = iter([PUBLIC, PRIVATE, PRIVATE, PRIVATE])  # DNS rebinding: public first, private after
+    monkeypatch.setattr(webimg, "resolve", lambda host: next(answers))
+    state["handler"] = lambda r: httpx.Response(200, content=png((10, 10)))
+    assert webimg.thumbnail("https://site.example/a") is not None
+    assert [s[0] for s in seen] == ["93.184.216.34"]
+
+
+def test_thumbnail_gives_up_after_the_deadline(net, monkeypatch):
+    seen, state = net
+    state["handler"] = lambda r: httpx.Response(200, content=png((10, 10)))
+    ticks = iter(range(0, 1000, 10))  # each clock read is 10 s later
+    monkeypatch.setattr(webimg, "time", type("T", (), {"monotonic": staticmethod(lambda: next(ticks))}))
+    assert webimg.thumbnail("https://site.example/a") is None
