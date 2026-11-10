@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from app import access, auth, gallery, invite, me, mealie, today, workouts
+from app import access, ask, auth, gallery, invite, me, mealie, today, workouts
 
 MAX_BODY = 20 * 1024 * 1024
 
@@ -81,6 +81,7 @@ app.include_router(auth.router)
 app.include_router(today.router)
 app.include_router(workouts.router)
 app.include_router(me.router)
+app.include_router(ask.router)
 app.include_router(gallery.router)
 app.include_router(invite.router)
 app.include_router(access.router)

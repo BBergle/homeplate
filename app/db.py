@@ -95,4 +95,5 @@ def connect() -> sqlite3.Connection:
     con.executescript(SCHEMA)
     add_column_if_missing(con, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing(con, "users", "workout_pct", "INTEGER NOT NULL DEFAULT 100")
+    add_column_if_missing(con, "users", "ai_model", "TEXT")
     return con

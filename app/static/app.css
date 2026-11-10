@@ -270,6 +270,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: var(--r-
 .card.more > summary { padding: var(--s-4); }
 .card.more > summary h2 { margin: 0; }
 .card.more > form { padding: 0 var(--s-4) var(--s-4); }
+.ai-settings .btn-danger { margin-top: var(--s-3); }
 
 .add-workout fieldset { margin: 0 0 var(--s-4); }
 .add-workout legend { margin: 0; font-size: var(--t-small); font-weight: 600; line-height: 1.35; }
