@@ -117,16 +117,26 @@ Kroger ordering (step 4). Voice. Several saved conversations. Notifications. A p
 
 1. **Search tool alongside the app's tools: works.** `tools: [{"type":"openrouter:web_search","parameters":{"max_results":5}}, {"type":"function",...}]` on `/chat/completions`. Only the app's function calls come back in `tool_calls`; after the `role:"tool"` reply the model searched and answered with `message.annotations[].url_citation{url,title}`. The two-request fallback is not needed.
 2. **Photo plus search in one request: works** (read the photo, searched, cited a recipe).
-3. **Reddit: works with the default engine.** With `allowed_domains:["reddit.com"]`, and also with no filter and "Reddit" in the question, it found a real thread, quoted a comment from it and linked it. With `engine:"exa"` plus the filter it ran four searches and then answered as if it had not searched: do not set the engine.
+3. **Reddit: works with the default engine.** With `allowed_domains:["reddit.com"]`, and also with no filter and "Reddit" in the question, it found a real thread, quoted a comment from it and linked it. With `engine:"exa"` plus the filter it ran four searches and then answered as if it had not searched. With `engine:"parallel"` it also found and quoted threads (see the comparison below).
 4. **YouTube API:** Google's pages give a default of 100 `search.list` calls a day and 10,000 units for everything else, and name no price on either page read. Not tested live (no key yet).
 5. **Fixed format together with tools: NOT TESTED.** The account ran out of credit first (see below). Until tested, keep the plan from the research notes: fixed-format requests are their own request with no tools.
 
 Found along the way, and to build in:
 
 - **Always send `max_tokens`.** Without it the request asks for 65,536 and is refused with a 402 when the balance is low, even for a tiny question.
-- **Search turns are slow and are the main cost.** Plain tool round: 7 s, $0.0004. One search: 20 to 30 s, 1 to 2 cents. A Reddit question: four searches, about 105 s, 4 cents. So: a model time limit of about 3 minutes, a visible "searching" state, and a cap on searches per message (`max_total_results` or a lower reasoning effort, to be tried).
-- The earlier "well under a dollar a month" holds for questions without search; with search, budget 1 to 4 cents a question.
-- Each request carrying the search tool costs about 4,500 input tokens before anything is asked.
+- **The default search engine is the slow, costly part, and it is a setting.** For `openai/gpt-5-nano` the default is OpenAI's own search. Measured on the same questions (2026-11-10):
+
+  | Search | Reasoning effort | Time | Cost per question |
+  |---|---|---|---|
+  | OpenRouter tool, default engine (OpenAI native) | default | 20 to 105 s | 1.1 to 4.4 cents |
+  | OpenRouter tool, `engine:"parallel"`, `mode:"turbo"` | default | 21 s | 0.17 cents |
+  | OpenRouter tool, `engine:"parallel"`, `mode:"turbo"` | `low` | 5 to 9 s | 0.12 to 0.14 cents |
+  | Our own `web_search` function backed by a local SearXNG | `low` | about 11 s | 0.02 to 0.03 cents |
+
+  **Decision: OpenRouter's tool with `{"engine":"parallel","mode":"turbo","max_results":5}` and `"reasoning":{"effort":"low"}`.** It answered the recipe and Reddit questions well, returns 600 to 900 characters of page excerpt per citation, and needs nothing extra on the server.
+- **SearXNG is a workable fallback, not needed now.** A throwaway local instance (`searxng/searxng`, `search.formats: [html, json]`, limiter off) answered in 1 to 3 s with good recipe, Reddit and YouTube results and thumbnails, through Brave and Google. DuckDuckGo answered it with a CAPTCHA within the first minute, which is the known weakness: it scrapes search sites and they block it without notice. It would be one more container to keep running, returns only short snippets, and needs the app to run the search itself as a look-up tool. Choose it only if OpenRouter's search stops being good or cheap enough.
+- With the chosen settings "well under a dollar a month" holds again: about 700 searched questions per dollar.
+- The default engine adds about 4,500 input tokens to every request; Parallel adds about 2,000.
 - Citations carry no page excerpt (`content` is empty), and addresses can come back with `?utm_source=openai` appended: strip it.
 - A 402 has two forms worth telling apart for the person: out of credit, and "in-flight budget" (retry shortly).
 

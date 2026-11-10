@@ -4,7 +4,7 @@
 
 **Goal:** A person saves their own OpenRouter key in Settings and asks questions on the Ask tab, getting an answer with web sources.
 
-**Architecture:** One new module talks to OpenRouter (`app/ai.py`), one holds the Ask tab and the AI settings route (`app/ask.py`). The answer is fetched in a FastAPI background task and the page polls for it, because a search answer takes 20 to 105 seconds and a phone or a reverse proxy will drop a request held that long. No tools, proposals or photos yet: those are pieces 2 and 3.
+**Architecture:** One new module talks to OpenRouter (`app/ai.py`), one holds the Ask tab and the AI settings route (`app/ask.py`). The answer is fetched in a FastAPI background task and the page polls for it, because an answer takes 5 to 20 seconds with the settings below, far longer with other models a person may pick, and later pieces add several look-up rounds; a phone or a reverse proxy will drop a request held that long. No tools, proposals or photos yet: those are pieces 2 and 3.
 
 **Tech Stack:** FastAPI, Jinja2, htmx 2 (vendored), sqlite3, httpx, cryptography (Fernet). No new dependencies.
 
@@ -18,7 +18,7 @@
 - Default model: `openai/gpt-5-nano`.
 - Weight is never sent to the model. In this piece nothing but the system prompt and the conversation is sent.
 - The model is told today's date in the app's timezone (`today.local_today()`).
-- Every OpenRouter chat request sends `max_tokens` and the tool `{"type":"openrouter:web_search","parameters":{"max_results":5}}`. Do not set `engine`.
+- Every OpenRouter chat request sends `"max_tokens": 4000`, `"reasoning": {"effort": "low"}` and the tool `{"type":"openrouter:web_search","parameters":{"engine":"parallel","mode":"turbo","max_results":5}}` (measured: 5 to 9 seconds and about 0.13 cents a question, against 20 to 105 seconds and 1 to 4 cents with the default engine).
 - Chat calls get a 180 second time limit. Other OpenRouter calls keep 10 seconds.
 - New page elements get their own CSS class names. Do not restyle `.card`, `.msg`, `.hint`, `.hero` or other shared classes.
 - Work on branch `assistant`. `.venv/bin/pytest -q` must pass at every commit (193 tests before this plan).
@@ -87,8 +87,8 @@ def test_chat_request_and_result(mock_ai):
     msgs = [{"role": "user", "content": "hi"}]
     assert ai.chat("sk-or-abc", "openai/gpt-5-nano", msgs) == {"text": "Hello", "sources": [{"url": "https://k.com/r", "title": "King Arthur"}]}
     assert seen["auth"] == "Bearer sk-or-abc"
-    assert seen["body"] == {"model": "openai/gpt-5-nano", "max_tokens": 8000, "messages": msgs,
-                            "tools": [{"type": "openrouter:web_search", "parameters": {"max_results": 5}}]}
+    assert seen["body"] == {"model": "openai/gpt-5-nano", "max_tokens": 4000, "reasoning": {"effort": "low"}, "messages": msgs,
+                            "tools": [{"type": "openrouter:web_search", "parameters": {"engine": "parallel", "mode": "turbo", "max_results": 5}}]}
 
 def test_chat_cleans_text_and_sources(mock_ai):
     mock_ai[CHAT] = reply(
@@ -335,7 +335,7 @@ def test_new_chat(ai_client, login_as):   # rows for u1 and u2; POST /ask/new ->
   - `_chat.html` (everything htmx swaps, target `#chat`, `hx-swap="innerHTML"`):
     - `<ol class="chat" aria-live="polite">`, one `<li>` per row: `chat-user`, `chat-ai`, or `chat-ai chat-error`. Text in a `<p class="chat-text">` (CSS `white-space: pre-wrap; overflow-wrap: anywhere`).
     - Under an answer with sources: `<ul class="chat-sources">` of `<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.title }}</a>`, attributes in exactly that order.
-    - A waiting row: `<li class="chat-ai chat-wait" role="status" hx-get="/ask/chat" hx-trigger="every 3s" hx-target="#chat" hx-swap="innerHTML">Thinking. Searching the web can take a minute or two.</li>`
+    - A waiting row: `<li class="chat-ai chat-wait" role="status" hx-get="/ask/chat" hx-trigger="every 3s" hx-target="#chat" hx-swap="innerHTML">Thinking. This can take a little while.</li>`
     - Empty conversation: `<p class="muted chat-empty">Ask about recipes, cooking or nutrition.</p>`
     - The form: `<form class="chat-form" method="post" action="/ask" hx-post="/ask" hx-target="#chat" hx-swap="innerHTML">` with `<textarea name="message" rows="2" maxlength="4000" required aria-label="Your question">` and a "Send" button. While waiting, both carry `disabled`. The word `disabled` appears nowhere else in the fragment.
   - `soon.html`: remove the Ask conditionals; it serves only `/order` now.
@@ -358,7 +358,7 @@ Needs OpenRouter credit on the key in `.env`. Check first with `GET https://open
 - [ ] **Step 1: Run it.** If `.env` has no `SECRET_KEY` line, append one (`python -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(48))" >> .env`). `docker compose up -d --build`. Sign in at `http://localhost:8000` as the test admin from the handoff notes, in a real browser.
 - [ ] **Step 2: Settings through the browser.** Save the key `sk-or-not-a-real-key`: expect "OpenRouter rejected that key." (this proves the form passes the same-origin guard). Then store the real key without showing it: a short script run with `.venv/bin/python`, `DATA_DIR=data` and `SECRET_KEY` and `OPENROUTER_API_KEY` read from `.env`, that calls `ai.encrypt` and updates the admin's `users` row. Reload Me: "A key is saved".
 - [ ] **Step 3: Ask three questions in the browser** and record seconds to answer, cost (from OpenRouter's activity page or `usage.cost`), and whether sources show: "How long do I rest pizza dough?", "Find a highly rated cinnamon roll recipe", "What cinnamon roll recipe do people on Reddit recommend most?". Check there is no Markdown or link text left in the answers, the waiting bubble appears and is replaced without a reload, and a reload mid-wait still ends with the answer.
-- [ ] **Step 4: Try `"reasoning": {"effort": "low"}`** in the chat request for the same three questions. Keep it (and update `test_chat_request_and_result`) only if the Reddit question finishes in under 60 seconds and still names and links a thread. Otherwise leave the request as it is.
+- [ ] **Step 4: Check the targets and one other model.** Each of the three questions should finish in under 20 seconds and cost under half a cent; if not, record what was measured and stop for the owner. Then set the model to `google/gemini-2.5-flash-lite` in Settings and ask the second question: if OpenRouter rejects the request because of `reasoning`, send that field only when the model's `supported_parameters` lists `reasoning`, with a test.
 - [ ] **Step 5: Settle design point 5.** One request to `/chat/completions` with the search tool, one function tool and `response_format` of type `json_schema` (research notes 1.8), asking for a pancake recipe from the web; then the same without tools. Record in the spec whether each returned valid JSON matching the schema.
 - [ ] **Step 6: Look at it.** At 375, 390 and 430 px wide, light and dark: Ask with no key, Ask empty, Ask with a long answer and sources, Ask while waiting, Me with the AI section open and with a message. Fix anything that overflows or collides with the tab bar.
 - [ ] **Step 7: Write up.** Replace the "NOT TESTED" line in the spec's live results with what step 5 found, add the timings and costs, and update `docs/HANDOFF.md` (state of the code, test count, what is next). Commit `git commit -m "docs: piece 1 live check results"`.
