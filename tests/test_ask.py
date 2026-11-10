@@ -281,3 +281,112 @@ def test_concurrent_second_message_is_ignored(ai_client, mock_ai, monkeypatch):
     monkeypatch.setattr(ask, "_conversation", lambda uid: [])
     ai_client.post("/ask", data={"message": "Q2"}, headers=HX)
     assert [r["content"] for r in rows()] == ["Q1", None]
+
+
+def call(name, args, id="c1"):
+    msg = {"role": "assistant", "content": None, "tool_calls": [{"id": id, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}]}
+    return httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls", "message": msg}]})
+
+
+@pytest.fixture
+def fake_web(monkeypatch):
+    from app import webimg
+
+    monkeypatch.setattr(webimg, "public_https", lambda u: u if ".example/" in u else None)
+    monkeypatch.setattr(webimg, "thumbnail", lambda u: b"jpg" if "a.example" in u else None)
+
+
+def proposals():
+    con = db.connect()
+    out = con.execute("SELECT * FROM proposals ORDER BY id").fetchall()
+    con.close()
+    return out
+
+
+def sequence(mock_ai, *replies):
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return replies[min(len(bodies), len(replies)) - 1]
+
+    mock_ai[CHAT] = handler
+    return bodies
+
+
+PROPOSE = call("propose_recipes", {"intro": "Here are two.", "recipes": [
+    {"name": "NameA", "url": "https://a.example/r", "why": "wa"},
+    {"name": "NameB", "url": "https://b.example/r", "why": "wb"},
+]})
+
+
+@pytest.fixture
+def scrape_ok(mock_mealie):
+    mock_mealie[("POST", "/api/recipes/test-scrape-url")] = lambda r: httpx.Response(200, json={"image": "https://a.example/i.jpg" if "a.example" in r.content.decode() else None, "recipeIngredient": ["x"]})
+
+
+def test_lookup_round_then_answer(ai_client, mock_ai, mock_mealie):
+    mock_mealie[("GET", "/api/recipes")] = httpx.Response(200, json={"items": [{"id": "i1", "name": "Rolls", "slug": "rolls"}]})
+    bodies = sequence(mock_ai, call("search_my_recipes", {"query": "rolls"}), reply("You have one."))
+    ai_client.post("/ask", data={"message": "rolls?"}, headers=HX)
+    assert len(bodies) == 2
+    tail = bodies[1]["messages"][-2:]
+    assert tail[0]["tool_calls"][0]["id"] == "c1"
+    assert tail[1] == {"role": "tool", "tool_call_id": "c1", "content": json.dumps({"recipes": [{"id": "i1", "name": "Rolls"}]})}
+    assert rows()[-1]["content"] == "You have one." and proposals() == []
+
+
+def test_propose_makes_cards_and_ends_turn(ai_client, mock_ai, scrape_ok, fake_web, data_dir):
+    bodies = sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    assert len(bodies) == 1
+    answer = rows()[-1]
+    assert answer["content"] == "Here are two." and answer["error"] == 0
+    a, b = proposals()
+    for p in (a, b):
+        assert (p["kind"], p["status"], p["message_id"], p["user_id"]) == ("recipe", "open", answer["id"], "u1")
+        assert set(json.loads(p["payload"])) == {"name", "url", "host", "why", "importable", "photo"}
+    assert json.loads(a["payload"])["photo"] is True and json.loads(b["payload"])["photo"] is False
+    assert (data_dir / "cards" / f"{a['id']}.jpg").read_bytes() == b"jpg" and not (data_dir / "cards" / f"{b['id']}.jpg").exists()
+
+
+def test_propose_with_no_usable_recipe(ai_client, mock_ai, mock_mealie, fake_web):
+    sequence(mock_ai, call("propose_recipes", {"intro": "x", "recipes": [{"name": "P", "url": "https://10.0.0.1/r", "why": "w"}]}))
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    last = rows()[-1]
+    assert last["content"] == "I found recipes but couldn't read their pages. Ask again." and last["error"] == 1 and proposals() == []
+
+
+def test_six_rounds_then_stop(ai_client, mock_ai, mock_mealie):
+    mock_mealie[("GET", "/api/recipes")] = httpx.Response(200, json={"items": []})
+    bodies = sequence(mock_ai, call("search_my_recipes", {"query": "x"}))
+    ai_client.post("/ask", data={"message": "go"}, headers=HX)
+    assert len(bodies) == ask.ROUNDS == 6
+    last = rows()[-1]
+    assert last["content"] == "That took too many steps. Ask again more simply." and last["error"] == 1
+
+
+def test_tools_use_the_askers_token(ai_client, mock_ai, mock_mealie):
+    seen = []
+
+    def search(request):
+        seen.append(request.headers["authorization"])
+        return httpx.Response(200, json={"items": []})
+
+    mock_mealie[("GET", "/api/recipes")] = search
+    sequence(mock_ai, call("search_my_recipes", {"query": "x"}), reply("ok"))
+    ai_client.post("/ask", data={"message": "go"}, headers=HX)
+    assert seen == ["Bearer tok-u1"]
+
+
+def test_next_turn_tells_the_model_what_it_showed(ai_client, mock_ai, scrape_ok, fake_web):
+    bodies = sequence(mock_ai, PROPOSE, reply("ok"))
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    ai_client.post("/ask", data={"message": "thanks"}, headers=HX)
+    assert bodies[1]["messages"][2] == {"role": "assistant", "content": "Here are two.\n[Shown as cards: 1. NameA (https://a.example/r); 2. NameB (https://b.example/r)]"}
+
+
+def test_system_prompt_mentions_cards(ai_client, mock_ai):
+    bodies = sequence(mock_ai, reply("ok"))
+    ai_client.post("/ask", data={"message": "hi"}, headers=HX)
+    assert "propose_recipes" in bodies[0]["messages"][0]["content"]

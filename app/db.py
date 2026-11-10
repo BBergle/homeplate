@@ -88,6 +88,16 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_waiting_answer ON chat_messages (user_id) WHERE role = 'assistant' AND content IS NULL;
+CREATE TABLE IF NOT EXISTS proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
+    message_id INTEGER NOT NULL,          -- the chat_messages answer row it hangs under
+    kind TEXT NOT NULL CHECK (kind IN ('recipe')),
+    payload TEXT NOT NULL,                -- JSON: name, url, host, why, importable (bool), photo (bool)
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'working', 'done', 'failed')),
+    result TEXT,                          -- done: the new recipe's slug; failed: the sentence shown
+    created_at TEXT NOT NULL
+);
 """
 
 
