@@ -2,7 +2,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app import mealie
+from app import ai, mealie
 from app.main import app
 
 
@@ -24,6 +24,44 @@ def mock_mealie(monkeypatch):
         return out
 
     monkeypatch.setattr(mealie, "client", httpx.Client(base_url="http://mealie", transport=httpx.MockTransport(handler)))
+    return routes
+
+
+CHAT = ("POST", "/api/v1/chat/completions")
+
+
+def reply(content="Hi", annotations=None, finish="stop"):
+    msg = {"role": "assistant", "content": content} | ({"annotations": annotations} if annotations else {})
+    return httpx.Response(200, json={"choices": [{"finish_reason": finish, "message": msg}]})
+
+
+def cite(url, title=None):
+    return {"type": "url_citation", "url_citation": {"url": url} | ({"title": title} if title else {})}
+
+
+def err(status, **meta):
+    return httpx.Response(status, json={"error": {"code": status, "message": "x", "metadata": meta}})
+
+
+@pytest.fixture
+def mock_ai(monkeypatch):
+    """Dict of (method, path) -> httpx.Response, an exception to raise, or callable(request) -> Response."""
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    routes = {
+        ("GET", "/api/v1/key"): httpx.Response(200, json={"data": {}}),
+        ("GET", "/api/v1/models"): httpx.Response(200, json={"data": [
+            {"id": "openai/gpt-5-nano", "architecture": {"input_modalities": ["text", "image"]}, "supported_parameters": ["tools"]},
+            {"id": "text/only", "architecture": {"input_modalities": ["text"]}, "supported_parameters": []},
+        ]}),
+    }
+
+    def handler(request):
+        out = routes[(request.method, request.url.path)]
+        if isinstance(out, Exception):
+            raise out
+        return out(request) if callable(out) else out
+
+    monkeypatch.setattr(ai, "client", httpx.Client(base_url="https://openrouter.ai/api/v1", transport=httpx.MockTransport(handler)))
     return routes
 
 
