@@ -1,6 +1,19 @@
 # The assistant (step 3)
 
-Design for the Ask tab. Written 2026-11-09 from the owner's requests over one long session. Nothing here is built yet.
+Design for the Ask tab. Written 2026-11-09 from the owner's requests over one long session. Pieces 1 and 2 are built; see "Live test results".
+
+## Change of direction (2026-11-10): Homeplate is chat only
+
+After trying pieces 1 and 2 the owner decided: "homeplate was just a chat window for mealie, and I do everything else in mealie", and "chat only" when asked about the calorie diary, weight, workouts and streak. Today, Me, the recipe page and the galleries were removed. This design still stands for the chat, with these parts no longer applying:
+
+- **Food entry** and **Workout** proposals, and the `get_today()` look-up: there is no diary to write to or read.
+- "Outside the Ask tab": the Estimate button on Today and "Fill in nutrition" on the recipe page. Filling in a recipe's nutrition can still be asked for in the chat (**Save to recipe**, written to Mealie).
+- The recipe page in Homeplate, including "Watch the video". An added card links to the recipe in Mealie.
+- "Weight is not sent to the model" is now true by construction: Homeplate holds no weight.
+- Settings live on the Settings page, not Me.
+
+Everything else (tools and tap-to-confirm cards, recipe finding, importing from a photo, text or link, "what do I have", meal plan and shopping list cards, YouTube, direct provider keys) is unchanged and is what pieces 3 to 5 build.
+
 
 ## What it is for
 
