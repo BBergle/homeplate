@@ -7,7 +7,7 @@ import httpx
 import pytest
 from conftest import CHAT, cite, err, reply
 
-from app import ai, ask, db, today
+from app import ai, ask, auth, db, settings
 
 
 def user_row():  # the only user in these tests
@@ -29,11 +29,11 @@ def ai_client(client, mock_ai):
 
 def test_save_key(client, mock_ai):
     r = save(client, key="  sk-or-test  ")
-    assert r.status_code == 303 and r.headers["location"] == "/me"
+    assert r.status_code == 303 and r.headers["location"] == "/settings"
     u = user_row()
     assert (u["ai_provider"], u["ai_model"]) == ("openrouter", "openai/gpt-5-nano")
     assert "sk-or-test" not in u["ai_key_enc"] and ai.decrypt(u["ai_key_enc"]) == "sk-or-test"
-    page = client.get("/me").text
+    page = client.get("/settings").text
     assert "sk-or-test" not in page and "A key is saved" in page
 
 
@@ -82,7 +82,7 @@ def test_overlong_key_refused(client, mock_ai):
 
 
 def test_save_ai_does_not_block_the_event_loop():
-    assert not inspect.iscoroutinefunction(ask.save_ai)  # it calls OpenRouter synchronously, so it must run in the threadpool
+    assert not inspect.iscoroutinefunction(settings.save_ai)  # it calls OpenRouter synchronously, so it must run in the threadpool
 
 
 def test_non_ascii_key_refused(client, mock_ai):
@@ -93,19 +93,19 @@ def test_non_ascii_key_refused(client, mock_ai):
 def test_overlong_model_refused(ai_client):
     assert "That doesn&#39;t look like a model name." in save(ai_client, model="m" * 101).text
     assert save(ai_client, model="m" * 100).status_code == 200  # 100 is allowed (unknown model refusal, not length)
-    assert 'maxlength="100"' in ai_client.get("/me").text
+    assert 'maxlength="100"' in ai_client.get("/settings").text
 
 
 def test_unreadable_key_is_not_saved_state(ai_client, monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "a-different-secret")
-    page = ai_client.get("/me").text
+    page = ai_client.get("/settings").text
     assert "A key is saved" not in page and "Remove key" not in page
     assert "Enter your OpenRouter key." in save(ai_client).text
 
 
-def test_me_ai_section_open_on_query(client, mock_ai):
-    assert re.search(r'<details[^>]*id="ai"[^>]*\sopen', client.get("/me?ai=1").text)
-    assert not re.search(r'<details[^>]*id="ai"[^>]*\sopen', client.get("/me").text)
+def test_settings_ai_section_always_visible(client, mock_ai):
+    page = client.get("/settings").text
+    assert '<section class="card" id="ai">' in page and "<details" not in page
 
 
 def test_refused_save_keeps_typed_model(client, mock_ai):
@@ -138,7 +138,7 @@ def add_row(role, content, minutes_ago=0, error=0, user_id="u1"):
 
 def test_no_key_page(client, mock_ai):
     r = client.get("/ask")
-    assert r.status_code == 200 and "Add your AI key" in r.text and 'href="/me?ai=1#ai"' in r.text and "<textarea" not in r.text
+    assert r.status_code == 200 and "Add your AI key" in r.text and 'href="/settings#ai"' in r.text and "<textarea" not in r.text
     assert client.post("/ask", data={"message": "hi"}, follow_redirects=False).status_code == 303 and rows() == []
     assert client.get("/ask/chat", follow_redirects=False).status_code == 303
 
@@ -179,7 +179,7 @@ def test_messages_sent_to_model(ai_client, mock_ai):
     add_row("assistant", "Your OpenRouter account is out of credit.", error=1)
     ai_client.post("/ask", data={"message": "Q2"}, headers=HX)
     sys = bodies[0]["messages"][0]
-    assert sys["role"] == "system" and today.local_today().strftime("%A, %B %-d, %Y") in sys["content"]
+    assert sys["role"] == "system" and auth.local_today().strftime("%A, %B %-d, %Y") in sys["content"]
     assert bodies[0]["messages"][1:] == [{"role": "user", "content": "Q1"}]
     assert bodies[1]["messages"][1:] == [{"role": "user", "content": "Q1"}, {"role": "assistant", "content": "A1"}, {"role": "user", "content": "Q2"}]
     assert bodies[1]["model"] == "openai/gpt-5-nano"
@@ -506,10 +506,16 @@ def imports(mock_mealie):
         return httpx.Response(200, json="the-slug")
 
     mock_mealie[("POST", "/api/recipes/create/url")] = handler
+    mock_mealie[("GET", "/api/users/self")] = httpx.Response(200, json={"id": "u1", "fullName": "U", "groupSlug": "home"})
     return calls
 
 
-def test_cards_render_under_their_answer(ai_client):
+@pytest.fixture
+def mealie_url(monkeypatch):
+    monkeypatch.setitem(auth.templates.env.globals, "mealie_url", "https://cook.example")
+
+
+def test_cards_render_under_their_answer(ai_client, mealie_url):
     a = add_card(photo=True)
     html = ai_client.get("/ask/chat").text
     assert "Soup" in html and "r.example" in html and "Easy." in html
@@ -519,11 +525,11 @@ def test_cards_render_under_their_answer(ai_client):
     assert f'<img class="rcard-photo" src="/ask/cards/{a}/photo" alt="" loading="lazy">' in html
     add_card(importable=False)
     add_card(hours_ago=25)
-    add_card(status="done", result="the-slug")
+    add_card(status="done", result="g/home/r/the-slug")
     add_card(status="working")
     add_card(status="failed", result="Mealie couldn't read that page.")
     html = ai_client.get("/ask/chat").text
-    for s in ("Mealie can't import this page.", "Expired, ask again.", "Added to your recipes.", 'href="/r/the-slug"',
+    for s in ("Mealie can't import this page.", "Expired, ask again.", "Added to your recipes.", 'href="https://cook.example/g/home/r/the-slug" target="_blank" rel="noopener noreferrer">Open in Mealie</a>',
               "Still adding. Check your recipes in a minute.", "Mealie couldn&#39;t read that page."):
         assert s in html
     assert html.count("<img") == 1
@@ -543,13 +549,31 @@ def test_card_text_is_escaped(ai_client):
     assert "&lt;script&gt;" in html and "<script>x" not in html
 
 
-def test_add_imports_once(ai_client, imports):
+def test_add_imports_once(ai_client, imports, mealie_url):
     a = add_card()
     r = ai_client.post(f"/ask/cards/{a}", headers=HX)
     assert r.status_code == 200 and "Added to your recipes." in r.text and r.text.lstrip().startswith("<li")
     assert imports == [{"url": "https://r.example/soup", "includeTags": False}]
     ai_client.post(f"/ask/cards/{a}", headers=HX)
-    assert len(imports) == 1 and card_row(a)["status"] == "done" and card_row(a)["result"] == "the-slug"
+    assert len(imports) == 1 and card_row(a)["status"] == "done" and card_row(a)["result"] == "g/home/r/the-slug"
+    assert 'href="https://cook.example/g/home/r/the-slug"' in ai_client.get("/ask/chat").text
+
+
+def test_added_card_has_no_link_without_mealie_url(ai_client, imports, monkeypatch):
+    monkeypatch.setitem(auth.templates.env.globals, "mealie_url", "")
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert "Added to your recipes." in r.text and "Open in Mealie" not in r.text and "<a " not in r.text.split("Added to your recipes.")[1].split("</p>")[0]
+
+
+def test_group_lookup_failure_keeps_the_import(ai_client, imports, mock_mealie, mealie_url):
+    mock_mealie[("GET", "/api/users/self")] = httpx.Response(500)
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert "Added to your recipes." in r.text and "Open in Mealie" not in r.text
+    assert len(imports) == 1 and card_row(a)["status"] == "done" and not card_row(a)["result"]
+    ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert len(imports) == 1
 
 
 def test_add_ignores_posted_address(ai_client, imports):

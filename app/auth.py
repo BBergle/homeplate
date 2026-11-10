@@ -1,7 +1,8 @@
 import os
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
@@ -22,6 +23,14 @@ class LoginRequired(Exception):
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def local_tz() -> ZoneInfo:
+    return ZoneInfo(os.environ.get("TZ", "UTC"))
+
+
+def local_today() -> date:
+    return _now().astimezone(local_tz()).date()
 
 
 def current_user(request: Request):
