@@ -181,6 +181,12 @@ def test_hero_under_target(client):
     assert '<svg class="ring"' in h and 'stroke-dasharray="25 100"' in h and "1,500 left" in h and "over" not in h
 
 
+def test_hero_empty_ring_has_no_progress_arc(client):
+    run("UPDATE users SET cal_target = 2000")
+    h = hero(client.get("/").text)
+    assert '<svg class="ring"' in h and "stroke-dasharray" not in h and "2,000 left" in h
+
+
 def test_hero_over_target(client):
     run("UPDATE users SET cal_target = 2000, protein_target = 100")
     client.post("/entries", data={"kind": "other", "description": "x", "calories": "2120", "protein_g": "130"})
@@ -233,6 +239,12 @@ def test_entry_time_uses_tz(client, monkeypatch):
     client.post("/entries", data={"kind": "other", "description": "x"})
     t = client.get("/").text
     assert "6:40 PM" in t and "Monday 9 Nov" in t
+
+
+def test_date_label_uses_tz(client, monkeypatch):
+    monkeypatch.setenv("TZ", "America/Indiana/Indianapolis")
+    monkeypatch.setattr(today, "_now", lambda: datetime(2026, 11, 10, 2, 0, tzinfo=timezone.utc))
+    assert "Monday 9 Nov" in client.get("/").text
 
 
 def test_kitchen_links(client, monkeypatch):

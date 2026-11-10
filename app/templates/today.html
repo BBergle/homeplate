@@ -11,8 +11,8 @@
     <div class="ring-box">
       <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="{{ '{:,}'.format(cal) }} of {{ '{:,}'.format(cal_target) }} calories">
         <circle cx="60" cy="60" r="52" fill="none" stroke="var(--surface-2)" stroke-width="12"/>
-        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="12" stroke-linecap="round"
-                pathLength="100" stroke-dasharray="{{ cal_pct }} 100" transform="rotate(-90 60 60)"/>
+        {% if cal_pct %}<circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="12" stroke-linecap="round"
+                pathLength="100" stroke-dasharray="{{ cal_pct }} 100" transform="rotate(-90 60 60)"/>{% endif %}
       </svg>
       <p class="ring-label" aria-hidden="true"><span class="num ring-num">{{ '{:,}'.format(cal) }}</span><span class="muted">kcal</span></p>
     </div>
@@ -75,7 +75,7 @@
 {% if entries %}
 <section class="card">
   <h2>Logged today</h2>
-  <ul class="list entries">{% for e in entries %}{% include "_entry.html" %}{% endfor %}</ul>
+  <ul class="list entries" role="list">{% for e in entries %}{% include "_entry.html" %}{% endfor %}</ul>
 </section>
 {% else %}
 <section class="card empty">

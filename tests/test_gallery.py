@@ -73,7 +73,7 @@ def test_gallery_count_and_private_chip(login_as, mock_mealie):
     upload(u2)
     mine = u2.get("/r/uuid-1").text
     assert "3 photos<" in mine and mine.count('class="chip"') == 1 and mine.count('<details class="more"') == 2
-    assert 'aria-label="Photo options"' in mine or "Photo options" in mine
+    assert 'aria-label="Photo options"' in mine
     other = u1.get("/r/uuid-1").text
     assert "2 photos<" in other and 'class="chip"' not in other and f"/photos/{p}/private" not in other
     assert "/private" in other  # u1's own photo still has its toggle

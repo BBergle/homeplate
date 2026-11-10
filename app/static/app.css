@@ -99,7 +99,7 @@ button, .btn {
 }
 button, .btn-primary { color: var(--on-accent); background: var(--accent); }
 .btn-secondary { color: var(--text); background: transparent; border-color: var(--border); }
-.btn-danger, button.danger { color: var(--danger); background: transparent; border-color: var(--border); }
+.btn-danger { color: var(--danger); background: transparent; border-color: var(--border); }
 button:active, .btn:active { transform: scale(.98); }
 button:disabled { opacity: .5; cursor: default; transform: none; }
 form > button, form > .btn { width: 100%; }
@@ -122,14 +122,14 @@ input[type=checkbox], input[type=radio] { flex: none; width: 24px; height: 24px;
 :is(.check, label:has(> [type=checkbox], > [type=radio])) { display: flex; align-items: center; gap: var(--s-3); min-height: 48px; margin: 0; font-size: var(--t-body); font-weight: 400; }
 
 /* Messages: an icon-like marker, not colour alone. Errors get "!"; success messages carry {{ icon("check") }}. */
-.msg, .error {
+.msg {
   display: flex; align-items: flex-start; gap: var(--s-2);
   margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4);
   background: var(--surface-2); color: var(--text);
   border-left: 4px solid var(--border); border-radius: var(--r-sm);
 }
-.msg-error, .error { border-left-color: var(--danger); }
-.msg-error::before, .error::before {
+.msg-error { border-left-color: var(--danger); }
+.msg-error::before {
   content: "!"; flex: none; width: 1.45em; height: 1.45em; border-radius: var(--r-pill);
   display: grid; place-items: center;
   background: var(--danger); color: var(--surface); font-size: var(--t-small); font-weight: 700;
@@ -177,7 +177,7 @@ input[type=checkbox], input[type=radio] { flex: none; width: 24px; height: 24px;
 
 /* Tab bar: one fixed bar; the active tab has colour, a top bar and aria-current. */
 .tabs {
-  position: fixed; inset-inline: 0; bottom: 0; display: flex;
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 2; display: flex;
   background: var(--surface); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -204,9 +204,6 @@ main.public { padding-bottom: calc(var(--s-6) + env(safe-area-inset-bottom, 0px)
 .hero-main { display: flex; align-items: center; gap: var(--s-4); }
 .ring-box { position: relative; flex: none; width: 144px; height: 144px; } /* inner circle fits a 5-digit total */
 .ring { display: block; width: 100%; height: 100%; }
-/* the ring's stroke attributes use var(); repeated here for engines that ignore var() in SVG attributes */
-.ring circle { stroke: var(--surface-2); }
-.ring circle + circle { stroke: var(--accent); }
 .ring-label {
   position: absolute; inset: 0; margin: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -309,6 +306,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: var(--r-
 .spark-cap { margin: 0 0 var(--s-3); font-size: var(--t-small); }
 .weight .btn { width: 100%; }
 
+.wrap-any { min-width: 0; overflow-wrap: anywhere; }
 .recipe-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: 48px; font-weight: 600; text-decoration: none; }
 
 fieldset { min-width: 0; margin: 0 0 var(--s-2); padding: 0; border: 0; }
@@ -322,17 +320,17 @@ legend { padding: 0; margin: 0 0 var(--s-3); font-size: var(--t-h2); font-weight
 .msg > span { min-width: 0; }
 
 /* ---------- Gallery ---------- */
-.share h2 { margin-bottom: var(--s-3); }
 .share-link { margin: 0 0 var(--s-4); font-size: var(--t-small); overflow-wrap: anywhere; }
 .shot { position: relative; }
-.shot-bar { position: absolute; inset: var(--s-1) var(--s-1) auto; display: flex; align-items: flex-start; justify-content: space-between; pointer-events: none; }
+.shot-bar { position: absolute; inset: var(--s-1) var(--s-1) auto; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--s-1); pointer-events: none; }
 .shot-bar > * { pointer-events: auto; }
-.shot-bar .chip { padding: 0 var(--s-2); background: var(--surface); box-shadow: var(--shadow-1); }
-.shot-bar .more { position: relative; margin-left: auto; }
+.shot-bar .chip { background: var(--surface); box-shadow: var(--shadow-1); }
+.shot-bar .more { margin-left: auto; } /* static: the popover anchors to .shot-bar, so it spans the tile */
 .shot-bar .more > summary { justify-content: center; width: 44px; min-height: 44px; border-radius: var(--r-pill); background: var(--surface); color: var(--text); box-shadow: var(--shadow-1); }
-.shot-bar .more > form { position: absolute; top: 100%; right: 0; z-index: 1; margin: var(--s-1) 0 0; }
-.shot-bar .more > form > button { width: auto; white-space: nowrap; background: var(--surface); }
+.shot-bar .more > form { position: absolute; top: 100%; left: 0; right: 0; z-index: 1; margin: var(--s-1) 0 0; }
+.shot-bar .more > form > button { padding: var(--s-2); font-size: var(--t-small); background: var(--surface); }
 .open-mealie { margin: var(--s-5) 0 0; }
+.open-mealie .btn { width: 100%; }
 
 /* ---------- Share ---------- */
 .public .hero { display: block; width: calc(100% + 2 * var(--s-4)); max-width: none; aspect-ratio: 4 / 3; margin: calc(-1 * var(--s-4)) calc(-1 * var(--s-4)) var(--s-4); object-fit: cover; }
@@ -360,4 +358,4 @@ legend { padding: 0; margin: 0 0 var(--s-3); font-size: var(--t-h2); font-weight
 .steps .step-text { grid-column: 2; white-space: pre-line; min-width: 0; }
 
 /* ---------- Join ---------- */
-.login .tagline { font-size: var(--t-h2); font-weight: 650; }
+.login h2.tagline { font-size: var(--t-h2); font-weight: 650; }

@@ -20,7 +20,7 @@
 {% if photos %}
 <ul class="photo-grid">{% for p in photos %}
   <li class="shot">
-    <a href="/photos/{{ p['id'] }}"><img src="/photos/{{ p['id'] }}" alt="" loading="lazy" width="200" height="200"></a>
+    <a href="/photos/{{ p['id'] }}"><img src="/photos/{{ p['id'] }}" alt="Photo of {{ recipe['name'] }}" loading="lazy" width="200" height="200"></a>
     {% if p["user_id"] == uid %}
     <div class="shot-bar">
       {% if p["private"] %}<span class="chip">{{ icon("lock") }}Private</span>{% endif %}

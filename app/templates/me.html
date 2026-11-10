@@ -54,8 +54,8 @@
 
 <section class="card" aria-labelledby="cooked-h">
   <h2 id="cooked-h">Recipes you've cooked</h2>
-  {% if cooked %}<ul class="list">{% for c in cooked %}
-    <li><a class="recipe-row" href="/r/{{ c['recipe_id'] }}"><span>{{ c['recipe_name'] }}</span><span class="muted num">{{ c['n'] }}</span></a></li>
+  {% if cooked %}<ul class="list" role="list">{% for c in cooked %}
+    <li><a class="recipe-row" href="/r/{{ c['recipe_id'] }}"><span class="wrap-any">{{ c['recipe_name'] }}</span><span class="muted num">{{ c['n'] }}</span></a></li>
   {% endfor %}</ul>{% else %}<p class="muted">Nothing yet.</p>{% endif %}
 </section>
 

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.main import app
+from tests.test_gallery import setup
 
 TEMPLATES = Path(__file__).parent.parent / "app" / "templates"
 CSP = "default-src 'self'; img-src 'self'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
@@ -25,11 +26,16 @@ def marked(html: str) -> list[str]:
     return re.findall(r'<a href="([^"]*)" aria-current="page"', nav)
 
 
-def test_active_tab(client):
-    for path, tab in (("/", "/"), ("/me", "/me"), ("/order", "/order"), ("/ask", "/ask"), ("/invite", "/me")):
+def test_active_tab(client, mock_mealie):
+    setup(mock_mealie)
+    for path, tab in (("/", "/"), ("/me", "/me"), ("/order", "/order"), ("/ask", "/ask"), ("/invite", "/me"), ("/r/uuid-1", "/me")):
         html = client.get(path).text
         assert html.count('aria-current="page"') == 1, path
         assert marked(html) == [tab], path
+    # re-rendered validation errors keep a tab marked
+    for path, data, tab in (("/weight", {"lbs": "5"}, "/"), ("/entries", {"kind": "other"}, "/"), ("/settings", {"weekly_goal": "0"}, "/me")):
+        r = client.post(path, data=data)
+        assert r.status_code == 200 and marked(r.text) == [tab], path
 
 
 def test_head_tags(client):
@@ -61,6 +67,10 @@ def test_public_csp(mock_mealie):
     assert "content-security-policy" not in c.get("/login").headers
 
 
+def test_no_csp_when_signed_in(client):
+    assert "content-security-policy" not in client.get("/").headers
+
+
 def test_long_text_classes(client):
     word = "w" * 60
     client.post("/entries", data={"kind": "other", "description": word})
@@ -70,6 +80,22 @@ def test_long_text_classes(client):
     assert "</div>" not in html[start:i]
     css = (Path(__file__).parent.parent / "app" / "static" / "app.css").read_text()
     assert re.search(r"\.entry-text\s*\{[^}]*overflow-wrap:\s*anywhere", css)
+    assert re.search(r"\.wrap-any\s*\{[^}]*overflow-wrap:\s*anywhere", css)
+
+
+def test_wrap_any_on_me_row_and_picker(client, mock_mealie):
+    word = "w" * 60
+    mock_mealie[("GET", "/api/recipes")] = httpx.Response(200, json={"items": [{"id": "r1", "name": word}]})
+    setup(mock_mealie)
+    assert f'<label class="check wrap-any"><input type="radio" name="recipe_id" value="r1"> {word}' in client.get("/recipes/search?q=w").text
+    client.post("/entries", data={"kind": "cooked", "recipe_id": "uuid-1"})
+    assert '<span class="wrap-any">' in client.get("/me").text
+
+
+def test_css_colours_only_in_tokens():
+    css = (Path(__file__).parent.parent / "app" / "static" / "app.css").read_text()
+    css = re.sub(r":root\s*\{[^}]*\}", "", css)
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|\b(rgba?|hsla?)\(", css)
 
 
 def test_no_second_footer_bar(client):

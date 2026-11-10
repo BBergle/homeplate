@@ -20,14 +20,14 @@
 {% if recipe.get("description") %}<p class="share-desc">{{ recipe["description"] }}</p>{% endif %}
 <section class="card">
   <h2>Ingredients</h2>
-  <ul class="ingredients">{% for i in recipe["recipeIngredient"] or [] %}
+  <ul class="ingredients" role="list">{% for i in recipe["recipeIngredient"] or [] %}
     {% if i.get("title") %}<li class="sub">{{ i["title"] }}</li>{% endif %}
     <li>{{ i["display"] }}</li>{% endfor %}
   </ul>
 </section>
 <section>
   <h2>Method</h2>
-  <ol class="steps">{% for s in recipe["recipeInstructions"] or [] %}
+  <ol class="steps" role="list">{% for s in recipe["recipeInstructions"] or [] %}
     <li>{% if s.get("title") %}<strong>{{ s["title"] }}</strong>{% endif %}<span class="step-text">{{ s["text"] }}</span></li>{% endfor %}
   </ol>
 </section>
@@ -35,7 +35,7 @@
 <section>
   <h2>Photos</h2>
   <ul class="photo-grid">{% for p in photos %}
-    <li><a href="/s/{{ token }}/photo/{{ p['id'] }}"><img src="/s/{{ token }}/photo/{{ p['id'] }}" alt="" loading="lazy" width="200" height="200"></a></li>{% endfor %}
+    <li><a href="/s/{{ token }}/photo/{{ p['id'] }}"><img src="/s/{{ token }}/photo/{{ p['id'] }}" alt="Photo of {{ recipe['name'] }}" loading="lazy" width="200" height="200"></a></li>{% endfor %}
   </ul>
 </section>
 {% endif %}

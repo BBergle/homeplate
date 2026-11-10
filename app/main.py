@@ -107,7 +107,7 @@ def mealie_auth_error(request: Request, exc):
 @app.exception_handler(mealie.MealieError)
 def mealie_error(request: Request, exc):
     if request.headers.get("HX-Request"):
-        return HTMLResponse('<p class="error" role="alert">Can\'t reach Mealie</p>')
+        return HTMLResponse('<p class="msg msg-error" role="alert">Can\'t reach Mealie</p>')
     page = "public_error.html" if request.url.path.startswith(("/s/", "/join/")) else "error.html"
     return auth.templates.TemplateResponse(request, page, {}, status_code=502)
 
