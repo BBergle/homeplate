@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from app import ai, auth, db, me, today
 
@@ -52,6 +52,13 @@ def _key(user) -> str | None:
     return ai.decrypt(user["ai_key_enc"])
 
 
+def _to_ask(request):
+    """No readable key: htmx would swap a followed redirect into #chat, so tell it to navigate."""
+    if request.headers.get("HX-Request"):
+        return Response(headers={"HX-Redirect": "/ask"})
+    return RedirectResponse("/ask", 303)
+
+
 def _answer(row_id: int, key: str, model: str, messages: list[dict]) -> None:
     try:
         r = ai.chat(key, model, messages)
@@ -81,7 +88,7 @@ def ask_page(request: Request, user=Depends(auth.current_user)):
 @router.get("/ask/chat")
 def ask_chat(request: Request, user=Depends(auth.current_user)):
     if _key(user) is None:
-        return RedirectResponse("/ask", 303)
+        return _to_ask(request)
     return _fragment(request, user["mealie_user_id"])
 
 
@@ -89,7 +96,7 @@ def ask_chat(request: Request, user=Depends(auth.current_user)):
 def ask_send(request: Request, tasks: BackgroundTasks, message: str = Form(""), user=Depends(auth.current_user)):
     key = _key(user)
     if key is None:
-        return RedirectResponse("/ask", 303)
+        return _to_ask(request)
     uid = user["mealie_user_id"]
     message = message.strip()[:MAX_MESSAGE]
     history = _conversation(uid)
@@ -118,6 +125,7 @@ def ask_send(request: Request, tasks: BackgroundTasks, message: str = Form(""), 
 
 @router.post("/ask/new")
 def ask_new(user=Depends(auth.current_user)):
+    # ponytail: New chat while an answer is being fetched lets one person run several model calls at once (each holds a threadpool thread); a per-person in-flight counter is the upgrade path if abused
     con = db.connect()
     try:
         con.execute("DELETE FROM chat_messages WHERE user_id = ?", (user["mealie_user_id"],))
@@ -128,9 +136,9 @@ def ask_new(user=Depends(auth.current_user)):
 
 
 @router.post("/settings/ai")
-async def save_ai(request: Request, user=Depends(auth.current_user)):
-    form = await request.form()
-    page = lambda msg: me._page(request, user, ai_msg=msg)
+def save_ai(request: Request, model: str = Form(""), key: str = Form(""), remove: str | None = Form(None), user=Depends(auth.current_user)):
+    typed = model.strip()
+    page = lambda msg: me._page(request, dict(user) | ({"ai_model": typed} if typed else {}), ai_msg=msg)  # keep what was typed
     uid = user["mealie_user_id"]
 
     def update(sql, args):
@@ -141,17 +149,18 @@ async def save_ai(request: Request, user=Depends(auth.current_user)):
         finally:
             con.close()
 
-    if "remove" in form:
+    if remove is not None:
         update("ai_provider = NULL, ai_key_enc = NULL", ())
         return RedirectResponse("/me", 303)
     if not ai.secret_ok():
         return page("Set SECRET_KEY on the server to a long random value before saving an AI key. Keys are stored encrypted with it.")
-    key = str(form.get("key", "")).strip()
-    model = str(form.get("model", "")).strip() or ai.DEFAULT_MODEL
-    if not key and not user["ai_key_enc"]:
+    key, model = key.strip(), typed or ai.DEFAULT_MODEL
+    if not key and ai.decrypt(user["ai_key_enc"]) is None:
         return page("Enter your OpenRouter key.")
-    if len(key) > 300:
+    if len(key) > 300 or not key.isascii():
         return page("That doesn't look like an OpenRouter key.")
+    if len(model) > 100:
+        return page("That doesn't look like a model name.")
     if key and ai.check_key(key) is False:
         return page("OpenRouter rejected that key.")
     known, warning = ai.model_check(model)

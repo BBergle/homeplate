@@ -57,6 +57,29 @@ def test_chat_cleans_text_and_sources(mock_ai):
     assert len(out["sources"]) == 8 and all(s["url"].startswith("https://") for s in out["sources"])
 
 
+def test_chat_strips_trailing_sources_block_when_sources_exist(mock_ai):
+    mock_ai[CHAT] = reply("Use bread flour.\n\n  sources:  \n- King Arthur\n- Other", [cite("https://k.com/r")])
+    assert ai.chat("k", "m", [])["text"] == "Use bread flour."
+    mock_ai[CHAT] = reply("Use bread flour.\nSources\n- King Arthur", [cite("https://k.com/r")])
+    assert ai.chat("k", "m", [])["text"] == "Use bread flour."
+
+
+def test_chat_keeps_sources_block_without_source_links(mock_ai):
+    mock_ai[CHAT] = reply("Use bread flour.\nSources:\n- King Arthur")
+    assert ai.chat("k", "m", [])["text"] == "Use bread flour.\nSources:\n- King Arthur"
+
+
+def test_chat_keeps_sources_mid_sentence(mock_ai):
+    mock_ai[CHAT] = reply("Good protein sources: eggs and beans.", [cite("https://k.com/r")])
+    assert ai.chat("k", "m", [])["text"] == "Good protein sources: eggs and beans."
+
+
+def test_chat_only_sources_block_is_blank_error(mock_ai):
+    mock_ai[CHAT] = reply("Sources:\n- King Arthur", [cite("https://k.com/r")])
+    with pytest.raises(ai.AIError, match="didn't answer"):
+        ai.chat("k", "m", [])
+
+
 @pytest.mark.parametrize("response,text", [
     (err(401), "OpenRouter rejected your key. Check it in Settings."),
     (err(402), "Your OpenRouter account is out of credit."),

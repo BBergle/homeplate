@@ -80,16 +80,16 @@
   </form>
 </details>
 
-<details class="card more" id="ai"{% if ai_msg %} open{% endif %}>
+<details class="card more" id="ai"{% if ai_msg or request.query_params.get("ai") %} open{% endif %}>
   <summary><h2>AI assistant</h2>{{ icon("chevron") }}</summary>
   <form method="post" action="/settings/ai" class="ai-settings">
     {% if ai_msg %}<p class="msg" role="alert">{{ ai_msg }}</p>{% endif %}
     <p class="muted">Bring your own OpenRouter key to use the Ask tab. What you type there is sent to OpenRouter under your key. Your weight is never sent.</p>
     <label>OpenRouter key <input type="password" name="key" autocomplete="off" maxlength="300"></label>
-    {% if user["ai_key_enc"] %}<p class="muted">A key is saved. Type a new one to replace it.</p>{% endif %}
-    <label>Model <input type="text" name="model" value="{{ user['ai_model'] or '' }}" placeholder="openai/gpt-5-nano"></label>
+    {% if has_ai_key %}<p class="muted">A key is saved. Type a new one to replace it.</p>{% endif %}
+    <label>Model <input type="text" name="model" value="{{ user['ai_model'] or '' }}" placeholder="openai/gpt-5-nano" maxlength="100"></label>
     <button type="submit">Save AI settings</button>
-    {% if user["ai_key_enc"] %}<button class="btn-danger" type="submit" name="remove" value="1">Remove key</button>{% endif %}
+    {% if has_ai_key %}<button class="btn-danger" type="submit" name="remove" value="1">Remove key</button>{% endif %}
   </form>
 </details>
 

@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
-from app import auth, db, stats, today
+from app import ai, auth, db, stats, today
 
 router = APIRouter()
 
@@ -97,6 +97,7 @@ def _page(request, user, error=None, ai_msg=None):
         "pending": pending,
         "error": error,
         "ai_msg": ai_msg,
+        "has_ai_key": ai.decrypt(user["ai_key_enc"]) is not None,
         "week_count": totals[-1],
         "week_extra": max(0, totals[-1] - goal),
         "streak_text": streak_text,

@@ -1,4 +1,6 @@
+import inspect
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -79,6 +81,38 @@ def test_overlong_key_refused(client, mock_ai):
     assert "That doesn&#39;t look like an OpenRouter key." in save(client, key="x" * 301).text
 
 
+def test_save_ai_does_not_block_the_event_loop():
+    assert not inspect.iscoroutinefunction(ask.save_ai)  # it calls OpenRouter synchronously, so it must run in the threadpool
+
+
+def test_non_ascii_key_refused(client, mock_ai):
+    r = save(client, key="sk-or-\u200btest")
+    assert r.status_code == 200 and "That doesn&#39;t look like an OpenRouter key." in r.text and user_row()["ai_key_enc"] is None
+
+
+def test_overlong_model_refused(ai_client):
+    assert "That doesn&#39;t look like a model name." in save(ai_client, model="m" * 101).text
+    assert save(ai_client, model="m" * 100).status_code == 200  # 100 is allowed (unknown model refusal, not length)
+    assert 'maxlength="100"' in ai_client.get("/me").text
+
+
+def test_unreadable_key_is_not_saved_state(ai_client, monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "a-different-secret")
+    page = ai_client.get("/me").text
+    assert "A key is saved" not in page and "Remove key" not in page
+    assert "Enter your OpenRouter key." in save(ai_client).text
+
+
+def test_me_ai_section_open_on_query(client, mock_ai):
+    assert re.search(r'<details[^>]*id="ai"[^>]*\sopen', client.get("/me?ai=1").text)
+    assert not re.search(r'<details[^>]*id="ai"[^>]*\sopen', client.get("/me").text)
+
+
+def test_refused_save_keeps_typed_model(client, mock_ai):
+    r = save(client, key="sk-or-test", model="nope/x")
+    assert 'name="model" value="nope/x"' in r.text and user_row()["ai_model"] is None
+
+
 def test_remove_key(ai_client):
     r = save(ai_client, remove="1")
     assert r.status_code == 303 and user_row()["ai_key_enc"] is None
@@ -104,9 +138,15 @@ def add_row(role, content, minutes_ago=0, error=0, user_id="u1"):
 
 def test_no_key_page(client, mock_ai):
     r = client.get("/ask")
-    assert r.status_code == 200 and "Add your AI key" in r.text and 'href="/me#ai"' in r.text and "<textarea" not in r.text
+    assert r.status_code == 200 and "Add your AI key" in r.text and 'href="/me?ai=1#ai"' in r.text and "<textarea" not in r.text
     assert client.post("/ask", data={"message": "hi"}, follow_redirects=False).status_code == 303 and rows() == []
     assert client.get("/ask/chat", follow_redirects=False).status_code == 303
+
+
+def test_no_key_htmx_gets_hx_redirect(client, mock_ai):
+    for r in (client.get("/ask/chat", headers=HX, follow_redirects=False), client.post("/ask", data={"message": "hi"}, headers=HX, follow_redirects=False)):
+        assert r.status_code == 200 and r.headers["HX-Redirect"] == "/ask" and "<html" not in r.text
+    assert rows() == []
 
 
 def test_key_unreadable_after_secret_change(ai_client, monkeypatch):
@@ -192,11 +232,14 @@ def test_second_message_while_waiting_is_ignored(ai_client, mock_ai):
     assert [r["content"] for r in rows()] == ["Q1", None]
 
 
-def test_stale_wait_becomes_error(ai_client):
+def test_stale_wait_becomes_error(ai_client, mock_ai):
     add_row("user", "Q1", minutes_ago=10)
     add_row("assistant", None, minutes_ago=10)
     t = ai_client.get("/ask/chat").text
     assert "That took too long. Ask again." in t and "every 3s" not in t and "disabled" not in t
+    mock_ai[CHAT] = reply("ok")
+    ai_client.post("/ask", data={"message": "Q2"}, headers=HX)  # the form works again
+    assert [r["content"] for r in rows()][-2:] == ["Q2", "ok"]
 
 
 def test_blank_and_long_messages(ai_client, mock_ai):

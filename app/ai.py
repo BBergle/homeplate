@@ -112,10 +112,6 @@ def chat(key: str, model: str, messages: list[dict]) -> dict:
     text = re.sub(r"\s*\(\[[^\]]*\]\([^)]*\)\)", "", content or "")
     text = re.sub(r"\[([^\]]*)\]\(http[^)]*\)", r"\1", text)
     text = re.sub(r"\s*\(https?://[^)\s]*\)", "", text).strip()  # bare "(https://...)" the model adds despite the prompt
-    if not text:
-        if choice.get("finish_reason") == "length":
-            raise AIError("The answer was cut off. Ask again, or ask for something shorter.")
-        raise AIError(_DOWN)
     sources, seen = [], set()
     for a in annotations:
         c = a.get("url_citation") or {}
@@ -123,4 +119,10 @@ def chat(key: str, model: str, messages: list[dict]) -> dict:
         if url and url not in seen:
             seen.add(url)
             sources.append({"url": url, "title": c.get("title") or urlsplit(url).hostname})
+    if sources:  # the model often ends with its own "Sources" list; the real links are shown under the answer
+        text = re.sub(r"(?ims)^[ \t]*sources:?[ \t]*$.*", "", text).strip()
+    if not text:
+        if choice.get("finish_reason") == "length":
+            raise AIError("The answer was cut off. Ask again, or ask for something shorter.")
+        raise AIError(_DOWN)
     return {"text": text, "sources": sources[:8]}
