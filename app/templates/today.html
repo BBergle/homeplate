@@ -41,4 +41,5 @@
          {% if weight is not none %}value="{{ weight }}"{% endif %}></label>
   <button type="submit">Save weight</button>
 </form>
+{% if mealie_url %}<p class="muted">Mealie: <a href="{{ mealie_url }}">Recipes</a> &middot; <a href="{{ mealie_url }}">Plan</a> &middot; <a href="{{ mealie_url }}">List</a></p>{% endif %}
 {% endblock %}

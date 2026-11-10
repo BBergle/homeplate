@@ -92,6 +92,9 @@ async def public_headers(request: Request, call_next):
         resp.headers["X-Robots-Tag"] = "noindex"
         # /join/ has a form: no-referrer would make browsers send `Origin: null`, which SameOrigin blocks
         resp.headers["Referrer-Policy"] = "same-origin" if request.url.path.startswith("/join/") else "no-referrer"
+        resp.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+        )
     return resp
 
 

@@ -1,10 +1,15 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block content %}
-<h1>homeplate</h1>
-<form method="post" action="/login" class="card">
-  {% if error %}<p class="error">{{ error }}</p>{% endif %}
-  <label>Mealie username <input name="username" autocomplete="username" required></label>
-  <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
-  <button>Sign in</button>
-</form>
+<div class="login">
+  <h1 class="wordmark">{{ icon("plate") }}homeplate</h1>
+  <p class="tagline muted">Cook at home. Keep the change.</p>
+  <form method="post" action="/login" class="card">
+    <label class="field">Mealie username <input name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required></label>
+    <label class="field">Password <input name="password" type="password" autocomplete="current-password" enterkeyhint="go" required></label>
+    {% if error %}<p class="msg msg-error" role="alert">{{ error }}</p>{% endif %}
+    <button class="btn btn-primary">Sign in</button>
+    <p class="hint muted">Use your Mealie account.</p>
+  </form>
+</div>
 {% endblock %}

@@ -1,5 +1,9 @@
 {% extends "public.html" %}
+{% from "_icons.html" import icon %}
 {% block content %}
-<h1>Not found</h1>
-<p>This link is no longer available.</p>
+<section class="card empty">
+  {{ icon("plate") }}
+  <h1>Not found</h1>
+  <p class="muted">This link is no longer available.</p>
+</section>
 {% endblock %}

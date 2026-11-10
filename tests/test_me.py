@@ -67,7 +67,8 @@ def test_weight_trend_and_soon(client, monkeypatch):
     assert "<polyline" not in client.get("/me").text and "180" in client.get("/me").text
     seed("INSERT INTO weights VALUES ('u1', '2026-11-10', 178.5)")
     assert "<polyline" in client.get("/me").text
-    assert "Coming soon" in client.get("/order").text and "Coming soon" in client.get("/ask").text
+    assert "Grocery ordering is on the way" in client.get("/order").text
+    assert "The food assistant is on the way" in client.get("/ask").text
 
 
 def test_manifest_and_login_head(client):
