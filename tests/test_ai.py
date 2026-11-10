@@ -63,6 +63,8 @@ def test_chat_cleans_text_and_sources(mock_ai):
     (httpx.Response(200, json={"error": {"code": 402, "message": "x"}}), "Your OpenRouter account is out of credit."),
     (httpx.Response(200, text="not json"), "The AI service didn't answer. Try again."),
     (reply("", finish="length"), "The answer was cut off. Ask again, or ask for something shorter."),
+    (reply("  "), "The AI service didn't answer. Try again."),
+    (reply("([k.com](https://k.com))"), "The AI service didn't answer. Try again."),
     (reply(None), "The AI service didn't answer. Try again."),
 ])
 def test_chat_errors(mock_ai, response, text):

@@ -109,12 +109,12 @@ def chat(key: str, model: str, messages: list[dict]) -> dict:
         content, annotations = choice["message"]["content"], choice["message"].get("annotations") or []
     except (KeyError, IndexError, TypeError) as e:
         raise AIError(_DOWN) from e
-    if not content:
+    text = re.sub(r"\s*\(\[[^\]]*\]\([^)]*\)\)", "", content or "")
+    text = re.sub(r"\[([^\]]*)\]\(http[^)]*\)", r"\1", text).strip()
+    if not text:
         if choice.get("finish_reason") == "length":
             raise AIError("The answer was cut off. Ask again, or ask for something shorter.")
         raise AIError(_DOWN)
-    text = re.sub(r"\s*\(\[[^\]]*\]\([^)]*\)\)", "", content)
-    text = re.sub(r"\[([^\]]*)\]\(http[^)]*\)", r"\1", text).strip()
     sources, seen = [], set()
     for a in annotations:
         c = a.get("url_citation") or {}
