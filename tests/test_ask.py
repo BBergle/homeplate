@@ -281,3 +281,336 @@ def test_concurrent_second_message_is_ignored(ai_client, mock_ai, monkeypatch):
     monkeypatch.setattr(ask, "_conversation", lambda uid: [])
     ai_client.post("/ask", data={"message": "Q2"}, headers=HX)
     assert [r["content"] for r in rows()] == ["Q1", None]
+
+
+def call(name, args, id="c1"):
+    msg = {"role": "assistant", "content": None, "tool_calls": [{"id": id, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}]}
+    return httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls", "message": msg}]})
+
+
+@pytest.fixture
+def fake_web(monkeypatch):
+    from app import webimg
+
+    monkeypatch.setattr(webimg, "public_https", lambda u: u if ".example/" in u else None)
+    monkeypatch.setattr(webimg, "thumbnail", lambda u: b"jpg" if "a.example" in u else None)
+
+
+def proposals():
+    con = db.connect()
+    out = con.execute("SELECT * FROM proposals ORDER BY id").fetchall()
+    con.close()
+    return out
+
+
+def sequence(mock_ai, *replies):
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return replies[min(len(bodies), len(replies)) - 1]
+
+    mock_ai[CHAT] = handler
+    return bodies
+
+
+PROPOSE = call("propose_recipes", {"intro": "Here are two.", "recipes": [
+    {"name": "NameA", "url": "https://a.example/r", "why": "wa"},
+    {"name": "NameB", "url": "https://b.example/r", "why": "wb"},
+]})
+
+
+@pytest.fixture
+def scrape_ok(mock_mealie):
+    mock_mealie[("POST", "/api/recipes/test-scrape-url")] = lambda r: httpx.Response(200, json={"image": "https://a.example/i.jpg" if "a.example" in r.content.decode() else None, "recipeIngredient": ["x"]})
+
+
+def test_lookup_round_then_answer(ai_client, mock_ai, mock_mealie):
+    mock_mealie[("GET", "/api/recipes")] = httpx.Response(200, json={"items": [{"id": "i1", "name": "Rolls", "slug": "rolls"}]})
+    bodies = sequence(mock_ai, call("search_my_recipes", {"query": "rolls"}), reply("You have one."))
+    ai_client.post("/ask", data={"message": "rolls?"}, headers=HX)
+    assert len(bodies) == 2
+    tail = bodies[1]["messages"][-2:]
+    assert tail[0]["tool_calls"][0]["id"] == "c1"
+    assert tail[1] == {"role": "tool", "tool_call_id": "c1", "content": json.dumps({"recipes": [{"id": "i1", "name": "Rolls"}]})}
+    assert rows()[-1]["content"] == "You have one." and proposals() == []
+
+
+def test_propose_makes_cards_and_ends_turn(ai_client, mock_ai, scrape_ok, fake_web, data_dir):
+    bodies = sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    assert len(bodies) == 1
+    answer = rows()[-1]
+    assert answer["content"] == "Here are two." and answer["error"] == 0
+    a, b = proposals()
+    for p in (a, b):
+        assert (p["kind"], p["status"], p["message_id"], p["user_id"]) == ("recipe", "open", answer["id"], "u1")
+        assert set(json.loads(p["payload"])) == {"name", "url", "host", "why", "importable", "photo"}
+    assert json.loads(a["payload"])["photo"] is True and json.loads(b["payload"])["photo"] is False
+    assert (data_dir / "cards" / f"{a['id']}.jpg").read_bytes() == b"jpg" and not (data_dir / "cards" / f"{b['id']}.jpg").exists()
+
+
+def test_propose_with_no_usable_recipe(ai_client, mock_ai, mock_mealie, fake_web):
+    sequence(mock_ai, call("propose_recipes", {"intro": "x", "recipes": [{"name": "P", "url": "https://10.0.0.1/r", "why": "w"}]}))
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    last = rows()[-1]
+    assert last["content"] == "I found recipes but couldn't read their pages. Ask again." and last["error"] == 1 and proposals() == []
+
+
+def test_six_rounds_then_stop(ai_client, mock_ai, mock_mealie):
+    mock_mealie[("GET", "/api/recipes")] = httpx.Response(200, json={"items": []})
+    bodies = sequence(mock_ai, call("search_my_recipes", {"query": "x"}))
+    ai_client.post("/ask", data={"message": "go"}, headers=HX)
+    assert len(bodies) == ask.ROUNDS == 6
+    last = rows()[-1]
+    assert last["content"] == "That took too many steps. Ask again more simply." and last["error"] == 1
+
+
+def test_tools_use_the_askers_token(ai_client, mock_ai, mock_mealie):
+    seen = []
+
+    def search(request):
+        seen.append(request.headers["authorization"])
+        return httpx.Response(200, json={"items": []})
+
+    mock_mealie[("GET", "/api/recipes")] = search
+    sequence(mock_ai, call("search_my_recipes", {"query": "x"}), reply("ok"))
+    ai_client.post("/ask", data={"message": "go"}, headers=HX)
+    assert seen == ["Bearer tok-u1"]
+
+
+def test_next_turn_tells_the_model_what_it_showed(ai_client, mock_ai, scrape_ok, fake_web):
+    bodies = sequence(mock_ai, PROPOSE, reply("ok"))
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    ai_client.post("/ask", data={"message": "thanks"}, headers=HX)
+    assert bodies[1]["messages"][2] == {"role": "assistant", "content": "Here are two.\n[Shown as cards: 1. NameA (https://a.example/r); 2. NameB (https://b.example/r)]"}
+
+
+def test_system_prompt_mentions_cards(ai_client, mock_ai):
+    bodies = sequence(mock_ai, reply("ok"))
+    ai_client.post("/ask", data={"message": "hi"}, headers=HX)
+    assert "propose_recipes" in bodies[0]["messages"][0]["content"]
+
+
+def test_proposal_wins_over_lookup_in_same_reply(ai_client, mock_ai, scrape_ok, fake_web):
+    calls = json.loads(PROPOSE.content)["choices"][0]["message"]["tool_calls"] + [
+        {"id": "c2", "type": "function", "function": {"name": "search_my_recipes", "arguments": '{"query": "x"}'}}]
+    msg = {"role": "assistant", "content": None, "tool_calls": calls[1:] + calls[:1]}  # look-up listed first
+    bodies = sequence(mock_ai, httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls", "message": msg}]}))
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    assert len(bodies) == 1 and rows()[-1]["content"] == "Here are two." and len(proposals()) == 2
+
+
+def test_private_image_is_never_fetched(ai_client, mock_ai, mock_mealie, fake_web, monkeypatch):
+    from app import webimg
+
+    fetched = []
+    monkeypatch.setattr(webimg, "thumbnail", lambda u: fetched.append(u))
+    mock_mealie[("POST", "/api/recipes/test-scrape-url")] = httpx.Response(200, json={"image": "https://10.0.0.1/i.jpg", "recipeIngredient": ["x"]})
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    assert fetched == [] and json.loads(proposals()[0]["payload"])["photo"] is False
+
+
+def test_no_database_write_while_fetching_photos(ai_client, mock_ai, scrape_ok, fake_web, monkeypatch):
+    from app import webimg
+
+    def thumb(url):
+        con = db.connect()  # a second writer must not be blocked by an open transaction
+        con.execute("PRAGMA busy_timeout = 0")
+        con.execute("INSERT INTO chat_messages (user_id, role, content, created_at) VALUES ('u1', 'user', 'x', 'now')")
+        con.commit()
+        con.close()
+        return b"jpg"
+
+    monkeypatch.setattr(webimg, "thumbnail", thumb)
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    assert len(proposals()) == 2
+
+
+def test_photo_write_failure_clears_photo_flag(ai_client, mock_ai, scrape_ok, fake_web, data_dir):
+    (data_dir / "cards").write_text("in the way")  # the folder cannot be made
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    a, b = proposals()
+    assert rows()[-1]["content"] == "Here are two." and json.loads(a["payload"])["photo"] is False
+
+
+@pytest.mark.parametrize("out", [httpx.ConnectError("down"), httpx.Response(401, json={})])
+def test_mealie_down_while_building_cards(ai_client, mock_ai, mock_mealie, fake_web, out):
+    mock_mealie[("POST", "/api/recipes/test-scrape-url")] = out
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    last = rows()[-1]
+    assert last["content"] == "Can't reach your recipe library to check those recipes. Try again." and last["error"] == 1 and proposals() == []
+
+
+def test_new_chat_deletes_proposals_and_photos(ai_client, mock_ai, scrape_ok, fake_web, data_dir):
+    sequence(mock_ai, PROPOSE)
+    ai_client.post("/ask", data={"message": "find"}, headers=HX)
+    pid = proposals()[0]["id"]
+    assert (data_dir / "cards" / f"{pid}.jpg").exists()
+    ai_client.post("/ask/new", follow_redirects=False)
+    assert proposals() == [] and not (data_dir / "cards" / f"{pid}.jpg").exists()
+
+
+def test_new_chat_keeps_other_persons_cards(ai_client, login_as, data_dir):
+    other = login_as("u2")
+    add_card(user_id="u2", photo=True)
+    (data_dir / "cards").mkdir()
+    (data_dir / "cards" / "1.jpg").write_bytes(b"x")
+    ai_client.post("/ask/new", follow_redirects=False)
+    assert len(proposals()) == 1 and (data_dir / "cards" / "1.jpg").exists()
+
+
+def test_shown_notes_are_per_person(ai_client, mock_ai, scrape_ok, fake_web):
+    bodies = sequence(mock_ai, reply("A1"), reply("A2"))
+    ai_client.post("/ask", data={"message": "Q1"}, headers=HX)
+    mid = rows()[-1]["id"]
+    con = db.connect()
+    con.execute("PRAGMA foreign_keys = OFF")
+    con.execute("INSERT INTO proposals (user_id, message_id, kind, payload, created_at) VALUES ('u2', ?, 'recipe', ?, 'now')",
+                (mid, json.dumps({"name": "Other", "url": "https://o.example/r"})))
+    con.commit()
+    con.close()
+    ai_client.post("/ask", data={"message": "Q2"}, headers=HX)
+    assert bodies[1]["messages"][2] == {"role": "assistant", "content": "A1"}
+
+
+def add_card(status="open", hours_ago=0, importable=True, photo=False, user_id="u1", result=None, **payload):
+    at = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat()
+    body = {"name": "Soup", "url": "https://r.example/soup", "host": "r.example", "why": "Easy.", "importable": importable, "photo": photo} | payload
+    con = db.connect()
+    mid = con.execute("INSERT INTO chat_messages (user_id, role, content, created_at) VALUES (?, 'assistant', 'Here.', ?)", (user_id, at)).lastrowid
+    cid = con.execute("INSERT INTO proposals (user_id, message_id, kind, payload, status, result, created_at) VALUES (?, ?, 'recipe', ?, ?, ?, ?)",
+                      (user_id, mid, json.dumps(body), status, result, at)).lastrowid
+    con.commit()
+    con.close()
+    return cid
+
+
+def card_row(cid):
+    con = db.connect()
+    r = con.execute("SELECT * FROM proposals WHERE id = ?", (cid,)).fetchone()
+    con.close()
+    return r
+
+
+@pytest.fixture
+def imports(mock_mealie):
+    calls = []
+
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(200, json="the-slug")
+
+    mock_mealie[("POST", "/api/recipes/create/url")] = handler
+    return calls
+
+
+def test_cards_render_under_their_answer(ai_client):
+    a = add_card(photo=True)
+    html = ai_client.get("/ask/chat").text
+    assert "Soup" in html and "r.example" in html and "Easy." in html
+    assert f'hx-post="/ask/cards/{a}"' in html and f'hx-target="#rcard-{a}"' in html and 'hx-swap="outerHTML"' in html and ">Add</button>" in html
+    assert 'hx-disabled-elt="find button"' in html
+    assert '<a class="rcard-link" href="https://r.example/soup" target="_blank" rel="noopener noreferrer">Open page</a>' in html
+    assert f'<img class="rcard-photo" src="/ask/cards/{a}/photo" alt="" loading="lazy">' in html
+    add_card(importable=False)
+    add_card(hours_ago=25)
+    add_card(status="done", result="the-slug")
+    add_card(status="working")
+    add_card(status="failed", result="Mealie couldn't read that page.")
+    html = ai_client.get("/ask/chat").text
+    for s in ("Mealie can't import this page.", "Expired, ask again.", "Added to your recipes.", 'href="/r/the-slug"',
+              "Still adding. Check your recipes in a minute.", "Mealie couldn&#39;t read that page."):
+        assert s in html
+    assert html.count("<img") == 1
+
+
+def test_card_without_photo_or_form_when_not_open(ai_client):
+    add_card(importable=False)
+    add_card(hours_ago=25)
+    add_card(status="done", result="s")
+    html = ai_client.get("/ask/chat").text
+    assert "<img" not in html and 'hx-post="/ask/cards/' not in html
+
+
+def test_card_text_is_escaped(ai_client):
+    add_card(name="<script>x</script>")
+    html = ai_client.get("/ask/chat").text
+    assert "&lt;script&gt;" in html and "<script>x" not in html
+
+
+def test_add_imports_once(ai_client, imports):
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert r.status_code == 200 and "Added to your recipes." in r.text and r.text.lstrip().startswith("<li")
+    assert imports == [{"url": "https://r.example/soup", "includeTags": False}]
+    ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert len(imports) == 1 and card_row(a)["status"] == "done" and card_row(a)["result"] == "the-slug"
+
+
+def test_add_ignores_posted_address(ai_client, imports):
+    a = add_card()
+    ai_client.post(f"/ask/cards/{a}", data={"url": "https://evil.example"}, headers=HX)
+    assert imports == [{"url": "https://r.example/soup", "includeTags": False}]
+
+
+def test_add_refused_page(ai_client, mock_mealie):
+    calls = []
+    mock_mealie[("POST", "/api/recipes/create/url")] = lambda req: calls.append(1) or httpx.Response(400, json={})
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert card_row(a)["status"] == "failed" and "Mealie couldn&#39;t read that page." in r.text
+    ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert len(calls) == 1
+
+
+def test_add_mealie_down(ai_client, mock_mealie):
+    mock_mealie[("POST", "/api/recipes/create/url")] = httpx.ConnectError("down")
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX)
+    assert card_row(a)["status"] == "open" and "Can&#39;t reach Mealie. Try again." in r.text and "Add</button>" in r.text
+    assert "Can&#39;t reach Mealie" not in ai_client.get("/ask/chat").text
+
+
+def test_add_expired_or_not_importable(ai_client, imports):
+    a, b = add_card(hours_ago=25), add_card(importable=False)
+    for cid in (a, b):
+        r = ai_client.post(f"/ask/cards/{cid}", headers=HX)
+        assert r.status_code == 200 and card_row(cid)["status"] == "open"
+    assert imports == []  # the mock records every import call: none was made
+    assert "Expired, ask again." in ai_client.post(f"/ask/cards/{a}", headers=HX).text
+
+
+def test_add_session_expired(ai_client, mock_mealie):
+    mock_mealie[("POST", "/api/recipes/create/url")] = httpx.Response(401, json={})
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", headers=HX, follow_redirects=False)
+    assert card_row(a)["status"] == "open" and r.status_code in (303, 200) and "/login" in (r.headers.get("location", "") + r.headers.get("hx-redirect", ""))
+
+
+def test_other_persons_card(ai_client, login_as, imports):
+    login_as("u2")
+    a = add_card(user_id="u2", photo=True)
+    assert ai_client.post(f"/ask/cards/{a}", headers=HX).status_code == 404
+    assert ai_client.get(f"/ask/cards/{a}/photo").status_code == 404
+    assert ai_client.post("/ask/cards/999").status_code == 404
+    assert imports == [] and card_row(a)["status"] == "open"
+
+
+def test_photo_route(ai_client, data_dir):
+    a = add_card(photo=True)
+    assert ai_client.get(f"/ask/cards/{a}/photo").status_code == 404
+    (data_dir / "cards").mkdir()
+    (data_dir / "cards" / f"{a}.jpg").write_bytes(b"\xff\xd8jpg")
+    r = ai_client.get(f"/ask/cards/{a}/photo")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg" and r.headers["cache-control"] == "private, max-age=86400"
+
+
+def test_plain_post_redirects_to_ask(ai_client, imports):
+    a = add_card()
+    r = ai_client.post(f"/ask/cards/{a}", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ask" and card_row(a)["status"] == "done"

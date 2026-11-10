@@ -393,3 +393,14 @@ legend { padding: 0; margin: 0 0 var(--s-3); font-size: var(--t-h2); font-weight
 .chat-empty { margin: 0 0 var(--s-4); }
 .chat-form { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-4); }
 .chat-form .btn { align-self: flex-end; }
+
+.rcards { list-style: none; margin: var(--s-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.rcard { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s-3); overflow: hidden; }
+.rcard-photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--r-md); margin: 0 0 var(--s-2); }
+.rcard-name { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.rcard-host { margin: 0 0 var(--s-2); color: var(--muted); font-size: var(--t-small); overflow-wrap: anywhere; }
+.rcard-why { margin: 0 0 var(--s-2); overflow-wrap: anywhere; }
+.rcard-note { margin: 0 0 var(--s-2); color: var(--muted); font-size: var(--t-small); }
+.rcard form { margin: 0 0 var(--s-2); }
+.rcard form .btn { width: 100%; }
+.rcard-link { font-size: var(--t-small); overflow-wrap: anywhere; }

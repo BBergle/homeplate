@@ -108,6 +108,7 @@ The recipe page in Homeplate shows "Watch the video" when a recipe has a video l
 - Photo-based calorie numbers are rough. They are always shown as estimates for the person to correct.
 - YouTube allows 100 searches a day for the whole server.
 - Weight is not sent to the model.
+- Homeplate fetches only card photos itself, and only from public addresses. The recipe page behind a card is fetched by Mealie: once when the card is made (to see whether it can be imported) and again when Add is tapped. Homeplate checks the address is public first, but Mealie resolves and follows it under its own rules. So a hostile page that got itself proposed could at worst make Mealie send one request it cannot read the answer to, or serve a different recipe than the card named. Nothing is saved without a tap.
 
 ## Not in this step
 
@@ -126,6 +127,12 @@ Kroger ordering (step 4). Voice. Several saved conversations. Notifications. A p
 
 Measured through the app (three questions, `openai/gpt-5-nano`, effort `low`, Parallel turbo search, 2026-11-10): the pizza dough rest question took 5.2 s, the highly rated cinnamon roll question 9.2 s, and the Reddit question 10.2 s. All under the 20 s target. Sources showed under the last two (5 each) and none under the first (no search). Cost: OpenRouter's credit total lags by several seconds, so per-question deltas were unreliable. Over the five app questions (the three above, a rerun of the cinnamon roll question after a fix, and the Gemini run) the account total rose by about 0.55 cents after subtracting the step 5 requests, so about 0.1 cents a question, under the half-cent target. With `google/gemini-2.5-flash-lite` the cinnamon roll question took 4.1 s, showed 5 sources, and OpenRouter did not reject `reasoning`.
 Found by the live check: the model sometimes wrote `Title (https://...)` in a Sources list in its text despite the prompt. The app now strips bare parenthesised links. It also sometimes writes its own "Sources" list and short `-` bullet lists. Short bullet lists are plain text and are left. When the answer has source links, a trailing block starting at a "Source:" or "Sources:" line is stripped, and so are lines that hold only a web address.
+
+### Piece 2 live check (2026-11-10, recipe cards)
+
+Run with `scripts/ask-check.mjs` (a real headless Chrome against the local app, real key), 22 of 22 checks on the final code. "Find me some arroz con pollo recipes" came back in 9 to 12 s as four cards, with photos, and no web address in the text. The model searches and calls `propose_recipes` in one request (about 0.14 cents). Add turned a card into "Added to your recipes." without a reload and Mealie had exactly one new recipe; a second tap did not import again; an unknown card id was refused. "Which of my saved recipes use chicken?" was answered through a look-up in 6 to 9 s. No sideways overflow at 375, 390 and 430 px, light and dark. Look-up rounds also worked on `google/gemini-2.5-flash-lite` and `anthropic/claude-haiku-5.5` through OpenRouter.
+
+Mealie's own link import took about a second per page. It answers 400 for a page it cannot read, and some pages parse with no ingredients (those get a card with no Add button). A duplicate import makes a second copy in Mealie, which is why a card works once.
 
 Found along the way, and to build in:
 

@@ -8,6 +8,7 @@
   <li class="chat-ai{{ ' chat-error' if m.error }}">
     <p class="chat-text">{{ m.content }}</p>
     {% if m.sources %}<ul class="chat-sources">{% for s in m.sources %}<li><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.title }}</a></li>{% endfor %}</ul>{% endif %}
+    {% if m.cards %}<ul class="rcards">{% for c in m.cards %}{% include "_rcard.html" %}{% endfor %}</ul>{% endif %}
   </li>
   {% endif %}
 {% endfor %}
