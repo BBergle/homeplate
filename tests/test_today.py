@@ -404,3 +404,85 @@ def test_decompression_bomb_is_not_an_image(client, monkeypatch):
     r = client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("a.jpg", jpeg((50, 50)))})
     assert "That file isn&#39;t an image" in r.text or "That file isn't an image" in r.text
     assert not rows("SELECT * FROM photos")
+
+
+def burn(calories, eaten=None):
+    run(
+        "INSERT INTO workouts (user_id, day, activity, minutes, intensity, calories, source, created_at) "
+        "VALUES ('u1', ?, 'cycling', 60, 'moderate', ?, 'entered', 'x')",
+        today.local_today().isoformat(), calories,
+    )
+    if eaten:
+        run(
+            "INSERT INTO entries (user_id, day, created_at, kind, description, calories) VALUES ('u1', ?, ?, 'other', 'x', ?)",
+            today.local_today().isoformat(), datetime.now(timezone.utc).isoformat(), eaten,
+        )
+
+
+def test_hero_net_under(client):
+    run("UPDATE users SET cal_target = 2000")
+    burn(600, 1840)
+    h = hero(client.get("/").text)
+    assert 'stroke-dasharray="62 100"' in h and ">1,240<" in h and "760 left" in h
+    assert ">1,840 eaten ·</span> <span" in h and ">600 burned</span>" in h and "counted" not in h and "(est.)" not in h
+    assert '1,240 net of 2,000 calories: 1,840 eaten, 600 burned"' in h
+    assert ">net kcal<" in h
+
+
+def test_hero_net_negative(client):
+    run("UPDATE users SET cal_target = 2000")
+    burn(900, 500)
+    h = hero(client.get("/").text)
+    assert "stroke-dasharray" not in h and "2,400 left" in h
+    assert "danger" not in h and "warning" not in h and ">900 burned</span>" in h and ">net kcal<" in h
+
+
+def test_hero_net_over_is_neutral(client):
+    run("UPDATE users SET cal_target = 2000")
+    burn(300, 2500)
+    h = hero(client.get("/").text)
+    assert "200 over" in h and 'stroke-dasharray="100 100"' in h and "danger" not in h and "warning" not in h
+
+
+def test_hero_no_burn_unchanged(client):
+    run("UPDATE users SET cal_target = 2000")
+    client.post("/entries", data={"kind": "other", "description": "x", "calories": "500"})
+    h = hero(client.get("/").text)
+    assert "burned" not in h and "eaten" not in h and "500 of 2,000 calories" in h
+
+
+def test_hero_pct(client):
+    run("UPDATE users SET cal_target = 2000, workout_pct = 75")
+    burn(800, 1840)
+    h = hero(client.get("/").text)
+    assert ">800 burned,</span> <span class=\"nw\">600 counted</span>" in h and "760 left" in h
+    assert '1,240 net of 2,000 calories: 1,840 eaten, 800 burned, 600 counted"' in h
+
+
+def test_hero_pct_zero(client):
+    run("UPDATE users SET cal_target = 2000, workout_pct = 0")
+    burn(800, 1000)
+    h = hero(client.get("/").text)
+    assert ">800 burned,</span> <span class=\"nw\">0 counted</span>" in h and "1,000 left" in h
+
+
+def test_hero_no_target_with_burn(client):
+    burn(600, 1840)
+    h = hero(client.get("/").text)
+    assert '<svg class="ring"' not in h and ">1,240<" in h and ">600 burned</span>" in h and "1,240</span> <span class=\"muted\">net kcal" in h
+
+
+def test_delete_entry_huge_id_is_404(client):
+    assert client.post(f"/entries/{2**63}/delete").status_code == 404
+
+
+def test_hero_estimated_marker(client):
+    run("UPDATE users SET cal_target = 2000, workout_pct = 75")
+    run(
+        "INSERT INTO workouts (user_id, day, activity, minutes, intensity, calories, source, created_at) "
+        "VALUES ('u1', ?, 'cycling', 60, 'moderate', 800, 'estimated', 'x')",
+        today.local_today().isoformat(),
+    )
+    assert ">800 burned,</span> <span class=\"nw\">600 counted (est.)</span>" in hero(client.get("/").text)
+    run("UPDATE workouts SET source = 'entered'")
+    assert "(est.)" not in hero(client.get("/").text)

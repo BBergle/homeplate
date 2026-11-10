@@ -101,6 +101,13 @@ def test_no_second_footer_bar(client):
     assert 'class="links"' not in client.get("/").text
 
 
+def test_hint_only_hidden_when_empty():
+    css = (Path(__file__).parent.parent / "app" / "static" / "app.css").read_text()
+    for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        if ".hint" in sel and re.search(r"display:\s*none", body):
+            assert all(s.strip().endswith(".hint:empty") for s in sel.split(",")), sel
+
+
 def test_recipe_image_class_does_not_leak_to_today_hero(client, mock_mealie):
     import httpx
 

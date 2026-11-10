@@ -1,0 +1,9 @@
+<div id="workout-calories">
+  {% if error %}<p class="msg msg-error" role="alert">{{ error }}</p>{% endif %}
+  <input type="hidden" name="estimated" value="{{ estimated }}">
+  <label class="field">Calories burned (leave blank to estimate)
+    <input type="number" name="calories" min="0" max="20000" step="1" inputmode="numeric" enterkeyhint="next" autocomplete="off"
+           {% if value != "" and value is not none %}value="{{ value }}"{% endif %} aria-describedby="workout-hint"></label>
+  <p id="workout-hint" class="muted hint">{% if hint %}{{ hint }}{% endif %}
+    {%- if not has_weight %} Log your weight for a better estimate.{% endif %}</p>
+</div>

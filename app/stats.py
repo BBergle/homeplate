@@ -49,3 +49,9 @@ def achievements(home_meals: int, distinct_recipes: int, longest: int) -> list[t
 
 def savings(home_meals: int, delivery_cost: float, home_meal_cost: float) -> float:
     return home_meals * (delivery_cost - home_meal_cost)
+
+
+def net_calories(eaten: int, burned: int, pct: int) -> tuple[int, int]:
+    """(counted burn, net): pct percent of the burn counts against what was eaten; net may be negative."""
+    counted = burned * pct // 100
+    return counted, eaten - counted

@@ -16,6 +16,7 @@ FIELDS = {
     "weight_goal": (50, 1000, False, True),
     "delivery_cost": (0, 500, False, False),
     "home_meal_cost": (0, 500, False, False),
+    "workout_pct": (0, 100, True, False),
 }
 
 
@@ -123,6 +124,8 @@ async def settings(request: Request, user=Depends(auth.current_user)):
     form = await request.form()
     vals = {}
     for name, (lo, hi, whole, optional) in FIELDS.items():
+        if name == "workout_pct" and name not in form:  # older forms omit it: keep the stored value
+            continue
         s = str(form.get(name, "")).strip()
         if not s and optional:
             vals[name] = None

@@ -169,7 +169,7 @@ def _decide(con, rid: int, user, status: str):
 
 
 def _exists(con, rid: int) -> None:
-    if rid > 2**63 - 1 or not con.execute("SELECT 1 FROM requests WHERE id = ?", (rid,)).fetchone():
+    if not 1 <= rid <= 2**63 - 1 or not con.execute("SELECT 1 FROM requests WHERE id = ?", (rid,)).fetchone():
         raise HTTPException(404)
 
 

@@ -14,7 +14,7 @@ homeplate is on http://localhost:8000 (`/healthz`), Mealie on http://localhost:9
 | --- | --- |
 | `MEALIE_URL` | Where homeplate reaches Mealie (default `http://mealie:9000`). |
 | `MEALIE_PUBLIC_URL` | Mealie address your browser can open, used for links. |
-| `SECRET_KEY` | Signs the private status links for account requests. Set a long random value and keep it the same. |
+| `SECRET_KEY` | Signs the private status links for account requests. Set a long random value and keep it the same. If it is not set, the app falls back to a built-in placeholder. That only lets someone make a fake "request sent" page appear and exposes nothing, but you should still set it. |
 | `BASE_URL` | homeplate's real public address, such as `https://plate.example.com`. An `https` address turns on the cookie `Secure` flag. It is the address used in recipe and join links. Form posts are accepted only from this address or the address the request arrived on. |
 | `TZ` | Time zone that decides what "today" is (default `UTC`). |
 | `DATA_DIR` | Where the database and photos live (default `/data`). |
@@ -22,6 +22,10 @@ homeplate is on http://localhost:8000 (`/healthz`), Mealie on http://localhost:9
 ## Sharing
 
 Nothing in homeplate is public: only people with an account can see any recipe, photo or user detail. The recipe page (`/r/<id>`) shows the full recipe and everyone's non-private photos. Its "Link to this recipe" card is an ordinary link; without an account it leads to the sign-in screen and, after signing in, back to that recipe.
+
+## Workouts
+
+Workouts are typed in. If you give a calorie number from your own device, it is used as given. Otherwise the app estimates it from the activity, effort, minutes and your latest logged weight. The day's calories are shown net of what was burned, and a setting in Me controls what share of workout calories counts.
 
 ## Accounts
 
@@ -42,7 +46,7 @@ While account requests are on, at most 20 requests can wait at once. Further req
 
 ## Upgrading
 
-- Older versions had public share links. They created Mealie share tokens that are valid for ten years, and this version no longer tracks them. They can still be opened through Mealie's own address. To remove them, list them and delete each one with Mealie's API. Replace `MEALIE`, `TOKEN` and `ID`:
+- Older versions had public share links. They created Mealie share tokens that are valid for ten years, and this version no longer tracks them. They can still be opened through Mealie's own address. To remove them, list them and delete each one with Mealie's API. Replace `MEALIE`, `TOKEN` and `ID`. `MEALIE` is your Mealie address (for example `http://localhost:9925`). `TOKEN` comes from Mealie: open your profile, choose "API Tokens", and create one. `ID` is the id of each link in the first command's output:
 
       curl -H "Authorization: Bearer TOKEN" MEALIE/api/shared/recipes
       curl -X DELETE -H "Authorization: Bearer TOKEN" MEALIE/api/shared/recipes/ID

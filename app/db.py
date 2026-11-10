@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     ai_key_enc TEXT,
     kroger_refresh_token_enc TEXT,
     kroger_location_id TEXT,
-    is_admin INTEGER NOT NULL DEFAULT 0
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    workout_pct INTEGER NOT NULL DEFAULT 100
 );
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
@@ -65,6 +66,18 @@ CREATE TABLE IF NOT EXISTS requests (
     decided_at TEXT,
     decided_by TEXT
 );
+CREATE TABLE IF NOT EXISTS workouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
+    day TEXT NOT NULL,
+    activity TEXT NOT NULL,
+    minutes INTEGER NOT NULL,
+    intensity TEXT NOT NULL,
+    calories INTEGER NOT NULL,
+    source TEXT NOT NULL CHECK (source IN ('entered','estimated')),
+    note TEXT,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -81,4 +94,5 @@ def connect() -> sqlite3.Connection:
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA)
     add_column_if_missing(con, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing(con, "users", "workout_pct", "INTEGER NOT NULL DEFAULT 100")
     return con

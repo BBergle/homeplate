@@ -1,0 +1,14 @@
+{% from "_icons.html" import icon %}
+<li class="entry">
+  <span class="thumb">{{ icon("bike" if w.activity == "cycling" else "activity") }}</span>
+  <div class="entry-text">
+    <p class="entry-name">{% if w.activity == "other" and w.note %}{{ w.note }}{% else %}{{ w.activity|capitalize }}{% endif %}</p>
+    {% if w.note and w.activity != "other" %}<p class="entry-note">{{ w.note }}</p>{% endif %}
+    <p class="entry-meta muted"><span class="chip">Workout</span> · {{ w.minutes }} min · <span class="num">{{ "{:,}".format(w.calories) }} kcal burned</span>
+      {%- if w.source == "estimated" %} · estimated{% endif %}</p>
+  </div>
+  <details class="more entry-more">
+    <summary aria-label="More">{{ icon("more") }}</summary>
+    <form method="post" action="/workouts/{{ w.id }}/delete"><button type="submit" class="btn-danger">Remove</button></form>
+  </details>
+</li>
