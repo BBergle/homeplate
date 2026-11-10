@@ -21,7 +21,7 @@ def mock_mealie(monkeypatch):
         out = routes[(request.method, request.url.path)]
         if isinstance(out, Exception):
             raise out
-        return out
+        return out(request) if callable(out) else out
 
     monkeypatch.setattr(mealie, "client", httpx.Client(base_url="http://mealie", transport=httpx.MockTransport(handler)))
     return routes

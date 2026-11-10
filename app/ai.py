@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import os
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -92,8 +93,8 @@ def _clean_url(url: str) -> str | None:
     return urlunsplit(parts._replace(query=query))
 
 
-def chat(key: str, model: str, messages: list[dict]) -> dict:
-    body = {"model": model, "max_tokens": 4000, "reasoning": {"effort": "low"}, "messages": messages, "tools": [_TOOL]}
+def chat(key: str, model: str, messages: list[dict], tools: list[dict] | None = None) -> dict:
+    body = {"model": model, "max_tokens": 4000, "reasoning": {"effort": "low"}, "messages": messages, "tools": [_TOOL, *(tools or [])]}
     try:
         r = client.post("/chat/completions", headers=_headers(key), json=body, timeout=180)
         data = r.json()
@@ -106,7 +107,15 @@ def chat(key: str, model: str, messages: list[dict]) -> dict:
         raise _error(code if isinstance(code, int) else r.status_code, data, model)
     try:
         choice = data["choices"][0]
-        content, annotations = choice["message"]["content"], choice["message"].get("annotations") or []
+        msg = choice["message"]
+        content, annotations, raw = msg["content"], msg.get("annotations") or [], msg.get("tool_calls")
+        calls = []
+        for c in raw or []:
+            try:
+                args = json.loads(c["function"]["arguments"])
+            except (ValueError, TypeError):
+                args = {}
+            calls.append({"id": c["id"], "name": c["function"]["name"], "args": args if isinstance(args, dict) else {}})
     except (KeyError, IndexError, TypeError) as e:
         raise AIError(_DOWN) from e
     text = re.sub(r"\s*\(\[[^\]]*\]\([^)]*\)\)", "", content or "")
@@ -122,8 +131,8 @@ def chat(key: str, model: str, messages: list[dict]) -> dict:
     if sources:  # the model often ends with its own "Sources" list; the real links are shown under the answer
         text = re.sub(r"(?ims)^[ \t]*sources?[ \t]*(?::|$).*", "", text)
         text = re.sub(r"(?m)^[ \t]*(?:[-*\u2022][ \t]*)?https?://\S+[ \t]*$\n?", "", text).strip()
-    if not text:
+    if not text and not calls:
         if choice.get("finish_reason") == "length":
             raise AIError("The answer was cut off. Ask again, or ask for something shorter.")
         raise AIError(_DOWN)
-    return {"text": text, "sources": sources[:8]}
+    return {"text": text, "sources": sources[:8], "calls": calls, "message": {"role": "assistant", "content": content, "tool_calls": raw}}

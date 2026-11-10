@@ -34,7 +34,8 @@ def test_chat_request_and_result(mock_ai):
 
     mock_ai[CHAT] = handler
     msgs = [{"role": "user", "content": "hi"}]
-    assert ai.chat("sk-or-abc", "openai/gpt-5-nano", msgs) == {"text": "Hello", "sources": [{"url": "https://k.com/r", "title": "King Arthur"}]}
+    assert ai.chat("sk-or-abc", "openai/gpt-5-nano", msgs) == {"text": "Hello", "sources": [{"url": "https://k.com/r", "title": "King Arthur"}], "calls": [],
+                                                           "message": {"role": "assistant", "content": "Hello", "tool_calls": None}}
     assert seen["auth"] == "Bearer sk-or-abc"
     assert seen["timeout"] == 180
     assert seen["body"] == {"model": "openai/gpt-5-nano", "max_tokens": 4000, "reasoning": {"effort": "low"}, "messages": msgs,
@@ -147,3 +148,33 @@ def test_model_check(mock_ai):
     assert ai.model_check("nope/x") == (False, None)
     mock_ai[("GET", "/api/v1/models")] = httpx.ConnectError("down")
     assert ai.model_check("nope/x") == (True, None)
+
+
+T = {"type": "function", "function": {"name": "get_recipe", "parameters": {"type": "object", "properties": {}}}}
+SEARCH = {"type": "openrouter:web_search", "parameters": {"engine": "parallel", "mode": "turbo", "max_results": 5}}
+
+
+def test_chat_sends_function_tools_after_search(mock_ai):
+    seen = []
+    mock_ai[CHAT] = lambda request: (seen.append(json.loads(request.content)), reply("Hi"))[1]
+    ai.chat("k", "m", [], tools=[T])
+    ai.chat("k", "m", [])
+    assert seen[0]["tools"] == [SEARCH, T]
+    assert seen[1]["tools"] == [SEARCH]
+
+
+def test_chat_returns_calls_and_message(mock_ai):
+    raw = [{"id": "c1", "type": "function", "function": {"name": "get_recipe", "arguments": "{\"id\": \"r1\"}"}},
+           {"id": "c2", "type": "function", "function": {"name": "x", "arguments": "not json"}},
+           {"id": "c3", "type": "function", "function": {"name": "y", "arguments": "[1]"}}]
+    mock_ai[CHAT] = httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls", "message": {"role": "assistant", "content": None, "tool_calls": raw}}]})
+    out = ai.chat("k", "m", [], tools=[T])
+    assert out["text"] == "" and out["calls"] == [{"id": "c1", "name": "get_recipe", "args": {"id": "r1"}},
+                                                  {"id": "c2", "name": "x", "args": {}}, {"id": "c3", "name": "y", "args": {}}]
+    assert out["message"] == {"role": "assistant", "content": None, "tool_calls": raw}
+
+
+def test_chat_plain_answer_has_no_calls(mock_ai):
+    mock_ai[CHAT] = reply("Hi")
+    out = ai.chat("k", "m", [])
+    assert out["calls"] == [] and out["message"]["content"] == "Hi"

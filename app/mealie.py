@@ -103,6 +103,27 @@ def recipe_image(recipe_id: str) -> bytes | None:
         return None
 
 
+def test_scrape(token: str, url: str) -> dict | None:
+    try:
+        data = _request("POST", "/api/recipes/test-scrape-url", token, json={"url": url}, timeout=20)
+    except MealieRejected:
+        return None
+    if not isinstance(data, dict):
+        return None
+    image = data.get("image")
+    if isinstance(image, list):
+        image = image[0] if image else None
+    if isinstance(image, dict):
+        image = image.get("url")
+    ingredients = data.get("recipeIngredient")
+    return {"name": data.get("name"), "image": image if isinstance(image, str) else None,
+            "ingredients": len(ingredients) if isinstance(ingredients, list) else 0}
+
+
+def import_url(token: str, url: str) -> str:
+    return _request("POST", "/api/recipes/create/url", token, json={"url": url, "includeTags": False}, timeout=60)
+
+
 def planned_today(token: str) -> list[dict]:
     entries = _request("GET", "/api/households/mealplans/today", token)
     return [e["recipe"] for e in entries if e.get("recipe")]
