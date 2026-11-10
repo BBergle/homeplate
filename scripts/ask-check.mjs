@@ -49,7 +49,7 @@ try {
   await go("/login");
   await js(`document.querySelector('[name=username]').value=${JSON.stringify(USER)}; document.querySelector('[name=password]').value=${JSON.stringify(PASS)}; document.querySelector('form').requestSubmit()`);
   await sleep(1500);
-  check("sign in lands on Today", (await js("location.pathname")) === "/");
+  check("sign in lands on the chat", (await js("location.pathname")) === "/ask");
 
   await go("/ask");
   check("the test admin has an AI key saved", await js(`!!document.querySelector('.chat-form')`));
@@ -83,8 +83,9 @@ try {
     const ok = await until(`document.querySelector('#${first.id}')?.textContent.includes('Added to your recipes.')`, 90);
     check("card becomes Added without a reload", ok && (await js(`window.__loaded === performance.timeOrigin`)), await js(`document.querySelector('#${first.id} .rcard-note')?.textContent`));
     const href = await js(`document.querySelector('#${first.id} .rcard-note a')?.getAttribute('href')`);
-    const r = await js(`fetch(${JSON.stringify(href || "/nope")}).then(async r => ({ status: r.status, text: await r.text() }))`);
-    check("Open recipe shows the recipe in Homeplate", r?.status === 200 && r.text.includes(first.name.split(" ")[0]), `${href} -> ${r?.status}`);
+    const m = /^(.+)\/g\/([^/]+)\/r\/([^/]+)$/.exec(href || "");
+    const inMealie = m ? await mealie(`/api/recipes/${m[3]}`) : null;
+    check("Open in Mealie points at the new recipe", !!m && m[1] === MEALIE && inMealie?.status === 200 && (await inMealie.json()).name === first.name, `${href} -> ${inMealie?.status}`);
     added = first.name;
     check("Mealie has one new recipe with that name", (await named(first.name)).length === before + 1, `before ${before}`);
     const again = await js(`fetch('/ask/cards/${first.id.replace("rcard-", "")}', { method: 'POST', headers: { 'HX-Request': 'true' } }).then(r => r.status)`);

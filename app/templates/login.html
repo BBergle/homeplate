@@ -5,7 +5,6 @@
   <h1 class="wordmark">{{ icon("plate") }}homeplate</h1>
   <p class="tagline muted">Cook at home. Keep the change.</p>
   <form method="post" action="/login" class="card">
-    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
     <label class="field">Mealie username <input name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required></label>
     <label class="field">Password <input name="password" type="password" autocomplete="current-password" enterkeyhint="go" required></label>
     {% if error %}<p class="msg msg-error" role="alert">{{ error }}</p>{% endif %}

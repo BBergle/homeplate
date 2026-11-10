@@ -2,11 +2,12 @@ import json
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
-from app import ai, asktools, auth, db, me, mealie, today, webimg
+from app import ai, asktools, auth, db, mealie, webimg
 
 router = APIRouter()
 
@@ -14,7 +15,7 @@ MAX_MESSAGE = 4000
 HISTORY = 20  # ponytail: a fixed 20 messages; switch to a token budget if long chats get cut off or cost too much
 STALE_SECONDS = 300
 SYSTEM = (
-    "You are the cooking assistant inside Homeplate, a home-cooking and calorie-diary app. "
+    "You are the cooking assistant inside Homeplate, a chat window for the person's Mealie recipe manager. "
     "Help with recipes, meal ideas, cooking and nutrition questions. Search the web when it helps, "
     "and prefer pages with a clear ingredient list and steps. Keep answers short: they are read on a phone. "
     "Write plain text with no Markdown, and do not put links in your answer: the sources you used are shown under it. "
@@ -188,7 +189,7 @@ def ask_send(request: Request, tasks: BackgroundTasks, message: str = Form(""), 
         if row_id is not None:
             sent = [{"role": m["role"], "content": m["content"] + _shown(m["cards"])} for m in history if m["content"] is not None and not m["error"]]
             sent = (sent + [{"role": "user", "content": message}])[-HISTORY:]
-            system = {"role": "system", "content": SYSTEM.format(date=today.local_today().strftime("%A, %B %-d, %Y"))}
+            system = {"role": "system", "content": SYSTEM.format(date=auth.local_today().strftime("%A, %B %-d, %Y"))}
             tasks.add_task(_answer, row_id, uid, key, user["ai_model"] or ai.DEFAULT_MODEL, user["mealie_token"], [system, *sent])
     if request.headers.get("HX-Request"):
         return _fragment(request, uid)
@@ -220,6 +221,15 @@ def _own_card(con, card_id: int, uid: str):
     return row
 
 
+def _mealie_path(token: str, slug: str) -> str | None:
+    """g/<group>/r/<slug>, or None when the group can't be looked up: the recipe is already imported, so never fail here."""
+    try:
+        group = mealie.me(token).get("groupSlug")
+        return f"g/{quote(group, safe='')}/r/{quote(slug, safe='')}" if group and isinstance(slug, str) else None
+    except Exception:
+        return None
+
+
 @router.post("/ask/cards/{card_id}")
 def card_add(request: Request, card_id: int, user=Depends(auth.current_user)):
     uid = user["mealie_user_id"]
@@ -238,7 +248,8 @@ def card_add(request: Request, card_id: int, user=Depends(auth.current_user)):
     if claimed:
         status, result = "done", None
         try:
-            result = mealie.import_url(user["mealie_token"], card["url"])
+            slug = mealie.import_url(user["mealie_token"], card["url"])
+            result = _mealie_path(user["mealie_token"], slug)
         except mealie.MealieRejected:
             status, result = "failed", "Mealie couldn't read that page."
         except mealie.MealieError:
@@ -274,48 +285,3 @@ def card_photo(card_id: int, user=Depends(auth.current_user)):
     if not os.path.isfile(path):
         raise HTTPException(404)
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
-
-
-@router.post("/settings/ai")
-def save_ai(request: Request, model: str = Form(""), key: str = Form(""), remove: str | None = Form(None), user=Depends(auth.current_user)):
-    typed = model.strip()
-    page = lambda msg: me._page(request, dict(user) | ({"ai_model": typed} if typed else {}), ai_msg=msg)  # keep what was typed
-    uid = user["mealie_user_id"]
-
-    def update(sql, args):
-        con = db.connect()
-        try:
-            con.execute(f"UPDATE users SET {sql} WHERE mealie_user_id = ?", (*args, uid))
-            con.commit()
-        finally:
-            con.close()
-
-    if remove is not None:
-        update("ai_provider = NULL, ai_key_enc = NULL", ())
-        return RedirectResponse("/me", 303)
-    if not ai.secret_ok():
-        return page("Set SECRET_KEY on the server to a long random value before saving an AI key. Keys are stored encrypted with it.")
-    key, model = key.strip(), typed or ai.DEFAULT_MODEL
-    if not key and ai.decrypt(user["ai_key_enc"]) is None:
-        return page("Enter your OpenRouter key.")
-    if len(key) > 300 or not key.isascii():
-        return page("That doesn't look like an OpenRouter key.")
-    if len(model) > 100:
-        return page("That doesn't look like a model name.")
-    if key and ai.check_key(key) is False:
-        return page("OpenRouter rejected that key.")
-    known, warning = ai.model_check(model)
-    if not known:
-        return page(f"OpenRouter has no model named {model}.")
-    if key:
-        update("ai_provider = 'openrouter', ai_key_enc = ?, ai_model = ?", (ai.encrypt(key), model))
-    else:
-        update("ai_model = ?", (model,))
-    if warning:
-        con = db.connect()  # re-read so the page shows the saved state
-        try:
-            user = con.execute("SELECT * FROM users WHERE mealie_user_id = ?", (uid,)).fetchone()
-        finally:
-            con.close()
-        return me._page(request, user, ai_msg=f"Saved. {model} {warning}, so some features won't work.")
-    return RedirectResponse("/me", 303)

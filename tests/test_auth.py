@@ -12,7 +12,7 @@ def test_login_ok(mock_mealie, login_as):
     con = db.connect()
     assert con.execute("SELECT weekly_goal FROM users WHERE mealie_user_id='u1'").fetchone()[0] == 3
     assert con.execute("SELECT count(*) FROM sessions").fetchone()[0] == 1
-    assert c.get("/", follow_redirects=False).status_code == 200
+    assert c.get("/ask", follow_redirects=False).status_code == 200
 
 
 def test_login_bad(mock_mealie):
@@ -31,20 +31,20 @@ def test_login_locked(mock_mealie):
 
 
 def test_requires_session(mock_mealie):
-    r = TestClient(app).get("/", follow_redirects=False)
+    r = TestClient(app).get("/ask", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login"
 
 
 def test_mealie_down(client, mock_mealie):
-    mock_mealie[("GET", "/api/households/mealplans/today")] = httpx.ConnectError("down")
-    r = client.get("/recipes/search")
+    mock_mealie[("GET", "/api/users/self")] = httpx.ConnectError("down")
+    r = client.get("/invite")
     assert r.status_code == 502
     assert "Can't reach Mealie" in r.text
 
 
 def test_token_expired(client, mock_mealie):
-    mock_mealie[("GET", "/api/households/mealplans/today")] = httpx.Response(401)
-    r = client.get("/recipes/search", follow_redirects=False)
+    mock_mealie[("GET", "/api/users/self")] = httpx.Response(401)
+    r = client.get("/invite", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login"
     assert db.connect().execute("SELECT count(*) FROM sessions").fetchone()[0] == 0
 
@@ -54,29 +54,22 @@ def test_session_refreshed_after_a_day(client, mock_mealie):
     con = db.connect()
     con.execute("UPDATE sessions SET refreshed_at = '2000-01-01T00:00:00+00:00'")
     con.commit()
-    assert client.get("/", follow_redirects=False).status_code == 200
+    assert client.get("/ask", follow_redirects=False).status_code == 200
     assert con.execute("SELECT mealie_token FROM sessions").fetchone()[0] == "new"
-
-
-def test_leading_number():
-    assert mealie.leading_number(None) is None
-    assert mealie.leading_number("") is None
-    assert mealie.leading_number("about 300 kcal") == 300
-    assert mealie.leading_number("312.5") == 312
 
 
 HX = {"HX-Request": "true"}
 
 
 def test_htmx_mealie_down(client, mock_mealie):
-    mock_mealie[("GET", "/api/households/mealplans/today")] = httpx.ConnectError("down")
-    r = client.get("/recipes/search", headers=HX)
+    mock_mealie[("GET", "/api/users/self")] = httpx.ConnectError("down")
+    r = client.get("/invite", headers=HX)
     assert r.status_code == 200 and "Can't reach Mealie" in r.text and "<html" not in r.text
 
 
 def test_htmx_token_expired(client, mock_mealie):
-    mock_mealie[("GET", "/api/households/mealplans/today")] = httpx.Response(401)
-    r = client.get("/recipes/search", headers=HX, follow_redirects=False)
+    mock_mealie[("GET", "/api/users/self")] = httpx.Response(401)
+    r = client.get("/invite", headers=HX, follow_redirects=False)
     assert r.status_code == 200 and r.headers["HX-Redirect"] == "/login"
     con = db.connect()
     assert con.execute("SELECT count(*) FROM sessions").fetchone()[0] == 0
@@ -84,7 +77,7 @@ def test_htmx_token_expired(client, mock_mealie):
 
 
 def test_htmx_no_session(mock_mealie):
-    r = TestClient(app).get("/recipes/search", headers=HX, follow_redirects=False)
+    r = TestClient(app).get("/ask/chat", headers=HX, follow_redirects=False)
     assert r.status_code == 200 and r.headers["HX-Redirect"] == "/login"
 
 
@@ -107,7 +100,7 @@ def count_sessions():
 
 def test_expired_session_redirects_and_is_deleted(client):
     sql("UPDATE sessions SET expires_at = '2000-01-01T00:00:00+00:00'")
-    r = client.get("/", follow_redirects=False)
+    r = client.get("/ask", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login"
     assert count_sessions() == 0
 
@@ -136,8 +129,8 @@ def test_logout(client):
 
 
 def test_mealie_5xx_is_cant_reach(client, mock_mealie):
-    mock_mealie[("GET", "/api/households/mealplans/today")] = httpx.Response(503)
-    r = client.get("/recipes/search")
+    mock_mealie[("GET", "/api/users/self")] = httpx.Response(503)
+    r = client.get("/invite")
     assert r.status_code == 502 and "Can't reach Mealie" in r.text
 
 
@@ -152,7 +145,7 @@ def test_mealie_down_during_login(mock_mealie):
 def test_refresh_failing_keeps_session_when_mealie_down(client, mock_mealie):
     mock_mealie[("POST", "/api/auth/refresh")] = httpx.ConnectError("down")
     sql("UPDATE sessions SET refreshed_at = '2000-01-01T00:00:00+00:00'")
-    assert client.get("/", follow_redirects=False).status_code == 200
+    assert client.get("/ask", follow_redirects=False).status_code == 200
     con = db.connect()
     try:
         row = con.execute("SELECT mealie_token, refreshed_at FROM sessions").fetchone()
@@ -164,7 +157,7 @@ def test_refresh_failing_keeps_session_when_mealie_down(client, mock_mealie):
 def test_refresh_rejected_drops_session(client, mock_mealie):
     mock_mealie[("POST", "/api/auth/refresh")] = httpx.Response(401)
     sql("UPDATE sessions SET refreshed_at = '2000-01-01T00:00:00+00:00'")
-    r = client.get("/", follow_redirects=False)
+    r = client.get("/ask", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login"
     assert count_sessions() == 0
 
@@ -191,41 +184,48 @@ def test_every_route_requires_a_session(mock_mealie):
     assert paths >= 8
 
 
-def _weights():
+def _msgs():
     con = db.connect()
     try:
-        return con.execute("SELECT * FROM weights").fetchall()
+        return con.execute("SELECT * FROM chat_messages").fetchall()
     finally:
         con.close()
 
 
+def _seed_chat():
+    sql("INSERT INTO chat_messages (user_id, role, content, created_at) VALUES ('u1', 'user', 'hi', 'x')")
+
+
+def post(client, origin=None):
+    """POST /ask/new (clears the chat) over a seeded message: 303 and no messages when it ran, 403 and one when blocked."""
+    _seed_chat()
+    headers = {} if origin is None else {"Origin": origin}
+    return client.post("/ask/new", headers=headers, follow_redirects=False)
+
+
 def test_cross_origin_post_blocked(client):
-    r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": "https://evil.example"})
-    assert r.status_code == 403 and not _weights()
+    assert post(client, "https://evil.example").status_code == 403 and _msgs()
 
 
 def test_same_origin_post_allowed(client):
-    r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": "http://TESTSERVER"})
-    assert r.status_code == 200 and _weights()
+    assert post(client, "http://TESTSERVER").status_code == 303 and not _msgs()
 
 
 def test_post_without_origin_allowed(client):
-    assert client.post("/weight", data={"lbs": "180"}).status_code == 200
+    assert post(client).status_code == 303
 
 
 def test_null_and_empty_origin_blocked(client):
     for origin in ("null", ""):
-        r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": origin})
-        assert r.status_code == 403, origin
-    assert not _weights()
+        assert post(client, origin).status_code == 403, origin
+    assert _msgs()
 
 
 def test_origin_port_mismatch_blocked(client):
-    r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": "http://testserver:9999"})
-    assert r.status_code == 403 and not _weights()
+    assert post(client, "http://testserver:9999").status_code == 403 and _msgs()
 
 
 def test_base_url_origin_allowed(client, monkeypatch):
     monkeypatch.setenv("BASE_URL", "https://Home.example")
-    assert client.post("/weight", data={"lbs": "180"}, headers={"Origin": "https://home.example"}).status_code == 200
-    assert client.post("/weight", data={"lbs": "181"}, headers={"Origin": "https://evil.example"}).status_code == 403
+    assert post(client, "https://home.example").status_code == 303
+    assert post(client, "https://evil.example").status_code == 403

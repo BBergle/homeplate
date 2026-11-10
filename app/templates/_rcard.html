@@ -3,7 +3,7 @@
   <p class="rcard-name">{{ c.name }}</p>
   <p class="rcard-host">{{ c.host }}</p>
   <p class="rcard-why">{{ c.why }}</p>
-  {% if c.status == "done" %}<p class="rcard-note">Added to your recipes. <a href="/r/{{ c.result }}">Open recipe</a></p>
+  {% if c.status == "done" %}<p class="rcard-note">Added to your recipes.{% if mealie_url and c.result and c.result.startswith("g/") %} <a href="{{ mealie_url.rstrip('/') }}/{{ c.result }}" target="_blank" rel="noopener noreferrer">Open in Mealie</a>{% endif %}</p>
   {% elif c.status == "working" %}<p class="rcard-note">Still adding. Check your recipes in a minute.</p>
   {% elif c.status == "failed" %}<p class="rcard-note">{{ c.result }}</p>
   {% elif not c.importable %}<p class="rcard-note">Mealie can't import this page.</p>

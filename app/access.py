@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
-from app import auth, db, invite, mealie, today
+from app import auth, db, invite, mealie
 
 router = APIRouter()
 MAX_PENDING = 20
@@ -40,7 +40,7 @@ def _decoy_ok(secret: str) -> bool:
 
 def local_date(iso: str | None) -> str:
     """'9 Nov' in the app's TZ."""
-    d = datetime.fromisoformat(iso).astimezone(today._tz()) if iso else None
+    d = datetime.fromisoformat(iso).astimezone(auth.local_tz()) if iso else None
     return f"{d.day} {d:%b}" if d else ""
 
 

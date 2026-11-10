@@ -247,18 +247,6 @@ def test_public_headers_on_request(login_as, mock_mealie):
     assert "x-robots-tag" not in anon.get("/requestx").headers
 
 
-def test_me_admin_link(login_as, mock_mealie):
-    a = admin(login_as, mock_mealie)
-    assert 'href="/admin"' in a.get("/me").text and "Admin · " not in a.get("/me").text
-    open_signups(a)
-    submit()
-    assert "Admin · 1 request<" in a.get("/me").text
-    submit(FORM | {"email": "b@x.io"})
-    assert "Admin · 2 requests<" in a.get("/me").text
-    p = as_user(login_as, mock_mealie, "u2")
-    assert 'href="/admin"' not in p.get("/me").text
-
-
 def test_is_admin_migration(data_dir):
     con = sqlite3.connect(data_dir / "homeplate.db")
     con.execute("CREATE TABLE users (mealie_user_id TEXT PRIMARY KEY, name TEXT)")

@@ -23,10 +23,9 @@
 {% if request.cookies.get("sid") %}
 {% from "_icons.html" import icon %}
 {% set p = request.url.path %}
-{% set here = "/me" if p.startswith(("/r/", "/settings")) or p in ["/invite", "/admin"] or p.startswith("/admin/") else "/" if p.startswith("/entries") or p == "/weight" else p %}
-{% if here not in ["/", "/me", "/order", "/ask"] %}{% set here = "/" %}{% endif %}
+{% set here = "/settings" if p.startswith("/settings") or p == "/invite" or p == "/admin" or p.startswith("/admin/") else "/ask" %}
 <nav class="tabs" aria-label="Main">
-  {%- for href, name, label in [("/", "today", "Today"), ("/me", "me", "Me"), ("/order", "order", "Order"), ("/ask", "ask", "Ask")] %}
+  {%- for href, name, label in [("/ask", "ask", "Ask"), ("/settings", "me", "Settings")] %}
   <a href="{{ href }}"{% if href == here %} aria-current="page"{% endif %}>{{ icon(name) }}<span>{{ label }}</span></a>
   {%- endfor %}
 </nav>
