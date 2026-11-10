@@ -1,3 +1,5 @@
+Superseded in part: public share pages were removed on 2026-11-09. See `2026-11-09-access.md`.
+
 # Homeplate: a companion app for Mealie (working name, my call)
 
 ## Context

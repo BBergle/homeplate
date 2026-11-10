@@ -63,7 +63,6 @@ def test_login_autofill(mock_mealie):
 def test_public_csp(mock_mealie):
     c = TestClient(app)
     assert c.get("/join/x").headers["content-security-policy"] == CSP
-    assert c.get("/s/nope").headers["content-security-policy"] == CSP
     assert "content-security-policy" not in c.get("/login").headers
 
 
@@ -100,3 +99,15 @@ def test_css_colours_only_in_tokens():
 
 def test_no_second_footer_bar(client):
     assert 'class="links"' not in client.get("/").text
+
+
+def test_recipe_image_class_does_not_leak_to_today_hero(client, mock_mealie):
+    import httpx
+
+    mock_mealie[("GET", "/api/recipes/uuid-1")] = httpx.Response(200, json={"id": "uuid-1", "slug": "c", "name": "C", "image": "x"})
+    mock_mealie[("GET", "/api/users/self")] = httpx.Response(200, json={"id": "x", "groupSlug": "home"})
+    assert 'class="recipe-hero"' in client.get("/r/uuid-1").text
+    css = open("app/static/app.css").read()
+    for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"@media[^{]*\{", "", css)):
+        if "aspect-ratio" in body:
+            assert not any(s.strip() == ".hero" or s.strip().endswith(" .hero") for s in sel.split(",")), sel

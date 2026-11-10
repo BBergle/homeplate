@@ -46,7 +46,9 @@ def test_toggle_private(login_as, mock_mealie):
     r = u2.post(f"/photos/{p}/private", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/r/uuid-1"
     assert f"/photos/{p}" not in u1.get("/r/uuid-1").text
+    assert "Show to others" in u2.get("/r/uuid-1").text and "Make public" not in u2.get("/r/uuid-1").text
     u2.post(f"/photos/{p}/private")
+    assert "Hide from others" in u2.get("/r/uuid-1").text
     assert f"/photos/{p}" in u1.get("/r/uuid-1").text
 
 

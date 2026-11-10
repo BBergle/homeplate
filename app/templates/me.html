@@ -79,6 +79,7 @@
 </details>
 
 <div class="account">
+  {% if user["is_admin"] %}<a class="btn btn-secondary" href="/admin">Admin{% if pending %} · {{ pending }} request{{ "" if pending == 1 else "s" }}{% endif %}</a>{% endif %}
   <a class="btn btn-secondary" href="/invite">Invite someone</a>
   <form method="post" action="/logout"><button class="btn-danger" type="submit">Sign out</button></form>
 </div>
