@@ -244,3 +244,53 @@ def test_ids_are_not_reused(client):
     client.post(f"/entries/{first}/delete")
     client.post("/entries", data={"kind": "other", "description": "b"})
     assert rows("SELECT id FROM entries")[0][0] > first
+
+
+def test_heic_upload_becomes_jpeg(client, data_dir):
+    import pillow_heif  # imported only to build the HEIC; the app must register the opener itself
+
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 48)).save(buf, format="HEIF")
+    client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("a.heic", buf.getvalue())})
+    p = rows("SELECT path FROM photos")[0]
+    assert Image.open(data_dir / "photos" / p["path"]).format == "JPEG"
+
+
+def test_fake_heic_rejected(client, data_dir):
+    r = client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("x.heic", b"not an image")})
+    assert "That file isn" in r.text and not rows("SELECT * FROM photos")
+    assert not (data_dir / "photos").exists() or not list((data_dir / "photos").glob("*"))
+
+
+def test_diary_photo_without_recipe_is_private(client, login_as):
+    c2 = login_as("u2")
+    c2.post("/entries", data={"kind": "other", "description": "x", "show_photo": "on"}, files={"photo": ("a.jpg", jpeg((50, 50)))})
+    p = rows("SELECT id, private FROM photos")[0]
+    assert p["private"] == 1
+    assert client.get(f"/photos/{p['id']}").status_code == 404
+    assert c2.get(f"/photos/{p['id']}").status_code == 200
+    assert c2.post(f"/photos/{p['id']}/private", follow_redirects=False).status_code == 404
+    assert rows("SELECT private FROM photos")[0][0] == 1
+
+
+def test_huge_photo_id_is_404(client):
+    big = "99999999999999999999999999999"
+    assert client.get(f"/photos/{big}").status_code == 404
+    assert client.post(f"/photos/{big}/private").status_code == 404
+
+
+def test_icc_profile_kept_exif_dropped(client, data_dir):
+    buf = io.BytesIO()
+    exif = Image.Exif()
+    exif[0x8825] = {1: "N"}
+    Image.new("RGB", (50, 50), "red").save(buf, "JPEG", exif=exif, icc_profile=b"fake-icc-profile")
+    client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("a.jpg", buf.getvalue())})
+    img = Image.open(data_dir / "photos" / rows("SELECT path FROM photos")[0][0])
+    assert img.info.get("icc_profile") == b"fake-icc-profile" and not img.getexif()
+
+
+def test_decompression_bomb_is_not_an_image(client, monkeypatch):
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1800)  # 2500 pixels: inside Pillow's warn-only band (1x-2x), must still be refused
+    r = client.post("/entries", data={"kind": "other", "description": "x"}, files={"photo": ("a.jpg", jpeg((50, 50)))})
+    assert "That file isn&#39;t an image" in r.text or "That file isn't an image" in r.text
+    assert not rows("SELECT * FROM photos")

@@ -52,6 +52,10 @@ def current_user(request: Request):
         con.close()
 
 
+def base_url(request: Request) -> str:
+    return os.environ.get("BASE_URL", "").rstrip("/") or str(request.base_url).rstrip("/")
+
+
 def drop_session(request: Request) -> RedirectResponse:
     con = db.connect()
     con.execute("DELETE FROM sessions WHERE id = ?", (request.cookies.get("sid", ""),))
@@ -77,7 +81,10 @@ def login(request: Request, username: str = Form(), password: str = Form()):
     except mealie.MealieAuthError as e:
         error = "Too many attempts. Try again later." if isinstance(e, mealie.MealieLocked) else "Wrong username or password"
         return templates.TemplateResponse(request, "login.html", {"error": error}, status_code=401)
-    user = mealie.me(token)
+    return start_session(mealie.me(token), token)
+
+
+def start_session(user: dict, token: str) -> Response:
     now = _now()
     sid = secrets.token_urlsafe(32)
     con = db.connect()

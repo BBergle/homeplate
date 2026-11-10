@@ -50,6 +50,12 @@ CREATE TABLE IF NOT EXISTS weights (
     lbs REAL NOT NULL,
     PRIMARY KEY (user_id, date)
 );
+CREATE TABLE IF NOT EXISTS shares (
+    token TEXT PRIMARY KEY,
+    recipe_id TEXT NOT NULL UNIQUE,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 

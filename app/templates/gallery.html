@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ recipe["name"] }}</h1>
+<form method="post" action="/r/{{ recipe['id'] }}/{{ 'unshare' if share_url else 'share' }}">
+  {% if share_url %}<p>Public link: <a href="{{ share_url }}">{{ share_url }}</a></p>{% endif %}
+  <button type="submit">{{ "Stop sharing" if share_url else "Create share link" }}</button>
+</form>
+{% if mealie_url and group %}<p><a href="{{ mealie_url }}/g/{{ group }}/r/{{ recipe['slug'] }}">Open in Mealie</a></p>{% endif %}
+{% if photos %}
+<ul class="gallery">{% for p in photos %}
+  <li>
+    <a href="/photos/{{ p['id'] }}"><img src="/photos/{{ p['id'] }}" alt="" loading="lazy"></a>
+    {% if p["user_id"] == uid %}
+    <form method="post" action="/photos/{{ p['id'] }}/private">
+      {% if p["private"] %}<span class="muted">Private</span> {% endif %}
+      <button type="submit">{{ "Make public" if p["private"] else "Make private" }}</button>
+    </form>
+    {% endif %}
+  </li>{% endfor %}
+</ul>
+{% else %}<p class="muted">No photos yet. Log this recipe with a photo and it will show up here.</p>{% endif %}
+{% endblock %}

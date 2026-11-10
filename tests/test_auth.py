@@ -182,10 +182,50 @@ def test_every_route_requires_a_session(mock_mealie):
 
     for route in walk(app.routes):
         path = route.path
-        if path in ("/login", "/healthz") or path.startswith("/static"):
+        if path in ("/login", "/healthz") or path.startswith(("/static", "/s/", "/join/")):
             continue
         method = "POST" if "POST" in route.methods else "GET"
         r = c.request(method, re.sub(r"\{[^}]+\}", "1", path), follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"] == "/login", (method, path, r.status_code)
         paths += 1
     assert paths >= 8
+
+
+def _weights():
+    con = db.connect()
+    try:
+        return con.execute("SELECT * FROM weights").fetchall()
+    finally:
+        con.close()
+
+
+def test_cross_origin_post_blocked(client):
+    r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403 and not _weights()
+
+
+def test_same_origin_post_allowed(client):
+    r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": "http://TESTSERVER"})
+    assert r.status_code == 200 and _weights()
+
+
+def test_post_without_origin_allowed(client):
+    assert client.post("/weight", data={"lbs": "180"}).status_code == 200
+
+
+def test_null_and_empty_origin_blocked(client):
+    for origin in ("null", ""):
+        r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": origin})
+        assert r.status_code == 403, origin
+    assert not _weights()
+
+
+def test_origin_port_mismatch_blocked(client):
+    r = client.post("/weight", data={"lbs": "180"}, headers={"Origin": "http://testserver:9999"})
+    assert r.status_code == 403 and not _weights()
+
+
+def test_base_url_origin_allowed(client, monkeypatch):
+    monkeypatch.setenv("BASE_URL", "https://Home.example")
+    assert client.post("/weight", data={"lbs": "180"}, headers={"Origin": "https://home.example"}).status_code == 200
+    assert client.post("/weight", data={"lbs": "181"}, headers={"Origin": "https://evil.example"}).status_code == 403

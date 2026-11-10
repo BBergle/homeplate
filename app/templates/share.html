@@ -1,0 +1,28 @@
+{% extends "public.html" %}
+{% block title %}{{ recipe["name"] }}{% endblock %}
+{% block content %}
+<h1>{{ recipe["name"] }}</h1>
+{% if recipe.get("image") %}<img class="hero" src="/s/{{ token }}/image" alt="">{% endif %}
+{% if recipe.get("description") %}<p>{{ recipe["description"] }}</p>{% endif %}
+<p class="muted">
+  {% if recipe.get("recipeServings") %}Serves {{ recipe["recipeServings"] | int if recipe["recipeServings"] == recipe["recipeServings"] | int else recipe["recipeServings"] }}{% endif %}
+  {% if recipe.get("totalTime") %} · {{ recipe["totalTime"] }}{% endif %}
+  {% if calories %} · {{ calories }} kcal{% endif %}
+  {% if protein %} · {{ protein }} g protein{% endif %}
+</p>
+<h2>Ingredients</h2>
+<ul class="ingredients">{% for i in recipe["recipeIngredient"] or [] %}
+  {% if i.get("title") %}<li class="sub">{{ i["title"] }}</li>{% endif %}
+  <li>{{ i["display"] }}</li>{% endfor %}
+</ul>
+<h2>Steps</h2>
+<ol class="steps">{% for s in recipe["recipeInstructions"] or [] %}
+  <li>{% if s.get("title") %}<strong>{{ s["title"] }}</strong><br>{% endif %}{{ s["text"] }}</li>{% endfor %}
+</ol>
+{% if photos %}
+<h2>Photos</h2>
+<ul class="gallery">{% for p in photos %}
+  <li><a href="/s/{{ token }}/photo/{{ p['id'] }}"><img src="/s/{{ token }}/photo/{{ p['id'] }}" alt="" loading="lazy"></a></li>{% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

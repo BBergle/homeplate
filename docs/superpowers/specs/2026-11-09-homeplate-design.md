@@ -69,8 +69,7 @@ phone browser ──> reverse proxy ──> homeplate (FastAPI, :8000) ──> M
                                          └── /data: homeplate.db, photos/
 ```
 
-Env: `MEALIE_URL`, `MEALIE_PUBLIC_URL` (for links), `MEALIE_API_TOKEN` (token of a dedicated
-non-admin Mealie user, used only to render public share pages), `SECRET_KEY`, `KROGER_CLIENT_ID`,
+Env: `MEALIE_URL`, `MEALIE_PUBLIC_URL` (for links), `SECRET_KEY`, `KROGER_CLIENT_ID`,
 `KROGER_CLIENT_SECRET`, `BASE_URL`, `TZ` (e.g. `America/Indiana/Indianapolis`, so "today" and week
 boundaries are local).
 
@@ -131,7 +130,7 @@ Streak, achievements and savings are computed from `entries` on each page load; 
   new household, fall back to the admin user-create call from the owner's session.
 - **Recipe gallery** `/r/{recipe_id}`: all non-private photos of that recipe from all users, link to
   the recipe in Mealie, "Create share link" / "Revoke".
-- **Public share** `/s/{token}`: recipe (fetched live from Mealie with the service token), photo
+- **Public share** `/s/{token}`: recipe (fetched live from Mealie through a Mealie share token created with the sharer's session, so no service account is needed), photo
   gallery. No login, `noindex`, nothing else about any user. Photos served at
   `/s/{token}/photo/{id}` only when the photo belongs to that recipe and is not private.
 
@@ -178,8 +177,7 @@ Each step is usable on its own and gets shown to the owner before the next start
 
 ## Needed from the owner
 
-- Mealie running on Unraid with an admin account, plus a separate non-admin "share" user whose API
-  token the share page uses.
+- Mealie running on Unraid with an admin account.
 - A free Kroger developer app (client ID and secret) with the redirect URL
   `{BASE_URL}/kroger/callback`.
 - An OpenRouter, Gemini or Claude API key for their own account when step 3 starts.

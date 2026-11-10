@@ -1,8 +1,11 @@
+import os
+from urllib.parse import urlsplit
+
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from app import auth, me, mealie, today
+from app import auth, gallery, invite, me, mealie, share, today
 
 MAX_BODY = 20 * 1024 * 1024
 
@@ -51,12 +54,45 @@ class BodyLimit:
             pass
 
 
+class SameOrigin:
+    """Block cross-site form posts: a present Origin must match Host (scheme ignored behind the proxy)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            headers = dict(scope["headers"])
+            origin = headers.get(b"origin")
+            if origin is not None and scope["method"] not in ("GET", "HEAD", "OPTIONS"):
+                allowed = {headers.get(b"host", b"").decode("latin-1").lower()}
+                allowed.add(urlsplit(os.environ.get("BASE_URL", "")).netloc.lower())
+                netloc = urlsplit(origin.decode("latin-1")).netloc.lower()  # "null" has no netloc
+                if not netloc or netloc not in allowed:
+                    return await Response("Cross-site request blocked", 403, media_type="text/plain")(scope, receive, send)
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(BodyLimit)
+app.add_middleware(SameOrigin)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router)
 app.include_router(today.router)
 app.include_router(me.router)
+app.include_router(gallery.router)
+app.include_router(share.router)
+app.include_router(invite.router)
+
+
+@app.middleware("http")
+async def public_headers(request: Request, call_next):
+    resp = await call_next(request)
+    if request.url.path.startswith(("/s/", "/join/")):
+        resp.headers["X-Robots-Tag"] = "noindex"
+        # /join/ has a form: no-referrer would make browsers send `Origin: null`, which SameOrigin blocks
+        resp.headers["Referrer-Policy"] = "same-origin" if request.url.path.startswith("/join/") else "no-referrer"
+    return resp
 
 
 @app.exception_handler(auth.LoginRequired)
@@ -69,7 +105,8 @@ def mealie_auth_error(request: Request, exc):
 def mealie_error(request: Request, exc):
     if request.headers.get("HX-Request"):
         return HTMLResponse('<p class="error" role="alert">Can\'t reach Mealie</p>')
-    return auth.templates.TemplateResponse(request, "error.html", {}, status_code=502)
+    page = "public_error.html" if request.url.path.startswith(("/s/", "/join/")) else "error.html"
+    return auth.templates.TemplateResponse(request, page, {}, status_code=502)
 
 
 @app.get("/healthz")
