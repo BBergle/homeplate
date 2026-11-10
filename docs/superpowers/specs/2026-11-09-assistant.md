@@ -113,17 +113,22 @@ The recipe page in Homeplate shows "Watch the video" when a recipe has a video l
 
 Kroger ordering (step 4). Voice. Several saved conversations. Notifications. A pantry inventory. Reading video transcripts.
 
-## Unverified, to settle first with a real key
+## Live test results (2026-11-10, real key, `openai/gpt-5-nano`)
 
-The first piece of work is a live test, before anything else is built on these:
+1. **Search tool alongside the app's tools: works.** `tools: [{"type":"openrouter:web_search","parameters":{"max_results":5}}, {"type":"function",...}]` on `/chat/completions`. Only the app's function calls come back in `tool_calls`; after the `role:"tool"` reply the model searched and answered with `message.annotations[].url_citation{url,title}`. The two-request fallback is not needed.
+2. **Photo plus search in one request: works** (read the photo, searched, cited a recipe).
+3. **Reddit: works with the default engine.** With `allowed_domains:["reddit.com"]`, and also with no filter and "Reddit" in the question, it found a real thread, quoted a comment from it and linked it. With `engine:"exa"` plus the filter it ran four searches and then answered as if it had not searched: do not set the engine.
+4. **YouTube API:** Google's pages give a default of 100 `search.list` calls a day and 10,000 units for everything else, and name no price on either page read. Not tested live (no key yet).
+5. **Fixed format together with tools: NOT TESTED.** The account ran out of credit first (see below). Until tested, keep the plan from the research notes: fixed-format requests are their own request with no tools.
 
-1. The exact request for OpenRouter's search tool alongside the app's tools (the docs name the fields but show no worked example).
-2. Whether a photo and a web search can go in the same request.
-3. How well searches surface and read Reddit threads.
-4. That the YouTube API is free at these volumes (believed so; the page read did not state a price).
-5. Whether the model can be made to return a fixed data format (for the standard recipe format and for estimates) in the same request that uses tools.
+Found along the way, and to build in:
 
-If 1 fails, the fallback is two requests per message: one to search, one to produce cards.
+- **Always send `max_tokens`.** Without it the request asks for 65,536 and is refused with a 402 when the balance is low, even for a tiny question.
+- **Search turns are slow and are the main cost.** Plain tool round: 7 s, $0.0004. One search: 20 to 30 s, 1 to 2 cents. A Reddit question: four searches, about 105 s, 4 cents. So: a model time limit of about 3 minutes, a visible "searching" state, and a cap on searches per message (`max_total_results` or a lower reasoning effort, to be tried).
+- The earlier "well under a dollar a month" holds for questions without search; with search, budget 1 to 4 cents a question.
+- Each request carrying the search tool costs about 4,500 input tokens before anything is asked.
+- Citations carry no page excerpt (`content` is empty), and addresses can come back with `?utm_source=openai` appended: strip it.
+- A 402 has two forms worth telling apart for the person: out of credit, and "in-flight budget" (retry shortly).
 
 ## Order of work
 
