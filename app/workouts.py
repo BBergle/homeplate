@@ -24,7 +24,7 @@ LB_TO_KG = 0.45359237
 def estimate(activity: str, intensity: str, minutes: int, weight_lbs: float | None) -> int:
     """Calories burned above resting: (MET - 1) x kg x hours."""
     met = MET[activity][INTENSITIES.index(intensity)]
-    return round((met - 1) * (weight_lbs or DEFAULT_LBS) * LB_TO_KG * minutes / 60)
+    return min(20000, round((met - 1) * (weight_lbs or DEFAULT_LBS) * LB_TO_KG * minutes / 60))
 
 
 def latest_weight(con, user_id: str) -> float | None:
@@ -51,6 +51,7 @@ def add_workout(
     intensity: str = Form(""),
     minutes: str = Form(""),
     calories: str = Form(""),
+    estimated: str = Form(""),
     note: str = Form(""),
     user=Depends(auth.current_user),
 ):
@@ -65,7 +66,7 @@ def add_workout(
         return _page(request, user, str(e), "workout")
     con = db.connect()
     try:
-        source = "entered" if cal is not None else "estimated"
+        source = "estimated" if cal is None or calories.strip() == estimated.strip() else "entered"
         if cal is None:
             cal = estimate(activity, intensity, mins, latest_weight(con, uid))
         con.execute(
@@ -85,9 +86,10 @@ def estimate_fragment(
     activity: str = Form(""),
     intensity: str = Form(""),
     minutes: str = Form(""),
+    calories: str = Form(""),
     user=Depends(auth.current_user),
 ):
-    ctx = {"value": "", "error": None, "hint": None}
+    ctx = {"value": "", "estimated": "", "error": None, "hint": None}
     con = db.connect()
     try:
         lbs = latest_weight(con, user["mealie_user_id"])
@@ -95,10 +97,11 @@ def estimate_fragment(
         con.close()
     try:
         activity, intensity, mins = _parse(activity, intensity, minutes)
-        ctx["value"] = estimate(activity, intensity, mins, lbs)
-        ctx["hint"] = f"Estimated from {mins} minute{'' if mins == 1 else 's'} at {intensity} effort and {lbs or 170:g} lb. Change it if you know better."
+        ctx["value"] = ctx["estimated"] = estimate(activity, intensity, mins, lbs)
+        ctx["hint"] = f"Estimated from {mins} minute{'' if mins == 1 else 's'} at {intensity} effort and {lbs or DEFAULT_LBS:g} lb. Change it if you know better."
     except ValueError as e:
         ctx["error"] = str(e)
+        ctx["value"] = calories
     ctx["has_weight"] = lbs is not None
     return auth.templates.TemplateResponse(request, "_workout_calories.html", ctx)
 

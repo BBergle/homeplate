@@ -57,8 +57,10 @@ def _page(request, user, error=None, open_form=None):
         "entries": [dict(e, time_label=_time_label(e["created_at"])) for e in entries],
         "workouts": workouts,
         "burned": burned,
-        "eaten_burned": (
-            f"{eaten:,} eaten · {counted:,} burned" + (f" of {burned:,}" if user["workout_pct"] < 100 else "")
+        "eaten_text": f"{eaten:,} eaten" if burned else None,
+        "burned_text": (
+            (f"{burned:,} burned" if user["workout_pct"] >= 100 else f"{burned:,} burned, {counted:,} counted")
+            + (" (est.)" if any(w["source"] == "estimated" for w in workouts) else "")
             if burned else None
         ),
         "eaten": eaten,

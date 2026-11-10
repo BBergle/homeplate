@@ -1,6 +1,6 @@
 {% from "_icons.html" import icon %}
 <li class="entry">
-  <span class="thumb">{{ icon("bike") }}</span>
+  <span class="thumb">{{ icon("bike" if w.activity == "cycling" else "activity") }}</span>
   <div class="entry-text">
     <p class="entry-name">{% if w.activity == "other" and w.note %}{{ w.note }}{% else %}{{ w.activity|capitalize }}{% endif %}</p>
     {% if w.note and w.activity != "other" %}<p class="entry-note">{{ w.note }}</p>{% endif %}

@@ -74,7 +74,7 @@ def test_estimate_fragment(client):
     assert 'value="' + str(workouts.estimate("cycling", "moderate", 60, None)) + '"' in r.text
     assert "60 minutes at moderate effort and 170 lb" in r.text
     r = client.post("/workouts/estimate", data={"activity": "cycling", "intensity": "moderate", "minutes": "abc"})
-    assert r.status_code == 200 and "<html" not in r.text and "value=" not in r.text and "Minutes" in r.text
+    assert r.status_code == 200 and "<html" not in r.text and "value=" not in r.text.replace('name="estimated" value=""', "") and "Minutes" in r.text
 
 
 def test_validation(client):
@@ -95,7 +95,7 @@ def test_listed_today(client):
     html = client.get("/").text
     assert "Cycling" in html and "90 min" in html and "600 kcal burned" in html and "Workout" in html
     assert "Rowing machine" in html
-    assert html.count("estimated") == 1  # only the estimated row
+    assert html.count("· estimated") == 1  # only the estimated row
 
 
 def test_other_users_workout_404(client, login_as):
@@ -129,3 +129,31 @@ def test_huge_workout_id_is_404(client):
 def test_one_minute_hint(client):
     r = client.post("/workouts/estimate", data={"activity": "cycling", "intensity": "moderate", "minutes": "1"})
     assert "1 minute at" in r.text and "1 minutes" not in r.text
+
+
+def test_estimate_then_submit_stays_estimated(client):
+    est = {"activity": "cycling", "intensity": "moderate", "minutes": "60"}
+    t = client.post("/workouts/estimate", data=est).text
+    assert 'name="estimated" value="' + str(workouts.estimate("cycling", "moderate", 60, None)) + '"' in t
+    n = workouts.estimate("cycling", "moderate", 60, None)
+    post(client, calories=str(n), estimated=str(n))
+    post(client, calories=str(n + 1), estimated=str(n))
+    post(client, calories="650")
+    assert [(w["calories"], w["source"]) for w in rows("SELECT * FROM workouts ORDER BY id")] == [
+        (n, "estimated"), (n + 1, "entered"), (650, "entered")]
+
+
+def test_estimate_clamped():
+    assert workouts.estimate("running", "hard", 1440, 250.0) == 20000
+
+
+def test_estimate_error_keeps_typed_calories(client):
+    r = client.post("/workouts/estimate", data={"activity": "cycling", "intensity": "moderate", "minutes": "", "calories": "<b>7"})
+    assert 'value="&lt;b&gt;7"' in r.text and "msg-error" in r.text and 'name="estimated" value=""' in r.text
+
+
+def test_activity_icon(client):
+    add_workout(activity="cycling")
+    add_workout(activity="running")
+    t = client.get("/").text
+    assert t.count("icon-bike") == 1 and t.count("icon-activity") == 1
