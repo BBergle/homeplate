@@ -1,45 +1,85 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block content %}
-<h1>Me</h1>
-{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-<div class="card">
-  <h2>This week</h2>
-  <p class="big">{{ this_week }} of {{ user["weekly_goal"] }}</p>
-  <p>Streak: {{ streak }} week{{ "" if streak == 1 else "s" }}</p>
-  <p>Saved vs delivery: ${{ saved }}</p>
+{% set goal = user["weekly_goal"] %}
+<header class="page-head"><h1>Me</h1></header>
+{% if error %}<p class="msg msg-error" role="alert">{{ error }}</p>{% endif %}
+
+<section class="card goal" aria-label="Weekly cooking goal">
+  <p class="goal-num num">{{ week_count }} of {{ goal }}</p>
+  <p class="muted goal-sub">meals cooked this week</p>
+  <div class="dots" aria-hidden="true">
+    {%- for i in range(goal) %}<span class="dot{{ ' on' if i < week_count }}"></span>{% endfor -%}
+    {%- if week_extra %}<span class="week-extra">+{{ week_extra }}</span>{% endif -%}
+  </div>
+  {% if streak_text %}<p class="goal-streak">{{ streak_text }}</p>{% endif %}
+</section>
+
+<div class="stats">
+  <div class="card stat"><span class="stat-v">${{ saved }} <span class="stat-unit">saved</span></span><span class="stat-l">vs ordering delivery</span></div>
+  <div class="card stat"><span class="stat-v">{{ home_meals }}</span><span class="stat-l">home meals cooked</span></div>
 </div>
 
-<div class="card">
-  <h2>Achievements</h2>
-  <ul class="plain">{% for name, earned in achievements %}
-    <li class="{{ 'earned' if earned else 'locked' }}">{{ "&#10003;"|safe if earned else "&#128274;"|safe }} {{ name }} ({{ "earned" if earned else "locked" }})</li>
-  {% endfor %}</ul>
-</div>
+<section class="card" aria-labelledby="ach-h">
+  <h2 id="ach-h">Achievements</h2>
+  <ul class="achievements">
+    {%- for b in badges %}
+    <li class="badge {{ 'on' if b.earned else 'off' }}">
+      <span class="mark">{{ icon("check" if b.earned else "lock") }}</span>
+      <span class="b-name">{{ b.name }}</span>
+      <span class="b-cap">{{ b.caption }}</span>
+    </li>
+    {%- endfor %}
+  </ul>
+</section>
 
-<div class="card">
-  <h2>Recipes you've cooked</h2>
-  {% if cooked %}<ul class="plain">{% for c in cooked %}
-    <li><a href="/r/{{ c['recipe_id'] }}">{{ c['recipe_name'] }}</a> <span class="muted">{{ c['n'] }}</span></li>
+<section class="card weight" aria-labelledby="weight-h">
+  <h2 id="weight-h">Weight</h2>
+  {% if latest is none %}
+  <p class="muted">No weight logged yet.</p>
+  {% else %}
+  <p class="weight-now"><span class="num weight-v">{{ latest }}</span> <span class="muted">lbs</span>{% if weight_goal %} <span class="muted weight-goal">Goal {{ weight_goal }} lbs</span>{% endif %}</p>
+  {% endif %}
+  {% if spark %}
+  <svg class="spark" viewBox="0 0 320 80" role="img" aria-label="{{ spark_label }}">
+    <polygon class="spark-area" points="{{ spark.area }}"/>
+    {% if spark.goal_y is not none %}<line class="spark-goal" x1="0" x2="320" y1="{{ spark.goal_y }}" y2="{{ spark.goal_y }}"/>{% endif %}
+    <polyline class="spark-line" points="{{ spark.line }}"/>
+    <circle class="spark-dot" cx="{{ spark.last[0] }}" cy="{{ spark.last[1] }}" r="4"/>
+  </svg>
+  <p class="muted spark-cap">Last 90 days{% if spark.goal_y is not none %} &middot; dashed line is your goal{% endif %}</p>
+  {% endif %}
+  <a class="btn btn-secondary" href="/">Log weight</a>
+</section>
+
+<section class="card" aria-labelledby="cooked-h">
+  <h2 id="cooked-h">Recipes you've cooked</h2>
+  {% if cooked %}<ul class="list">{% for c in cooked %}
+    <li><a class="recipe-row" href="/r/{{ c['recipe_id'] }}"><span>{{ c['recipe_name'] }}</span><span class="muted num">{{ c['n'] }}</span></a></li>
   {% endfor %}</ul>{% else %}<p class="muted">Nothing yet.</p>{% endif %}
-</div>
+</section>
 
-<div class="card">
-  <h2>Weight</h2>
-  {% if latest is none %}<p class="muted">No weight logged yet.</p>
-  {% else %}<p>Latest: {{ latest }} lbs{% if user["weight_goal"] %} &middot; Goal: {{ user["weight_goal"] }} lbs{% endif %}</p>{% endif %}
-  {% if line %}<svg viewBox="0 0 320 80" class="spark" role="img" aria-label="Weight, last 90 days"><polyline points="{{ line }}" fill="none" stroke="currentColor" stroke-width="2"/></svg>{% endif %}
-</div>
+<details class="card more"{% if error %} open{% endif %}>
+  <summary><h2>Settings</h2>{{ icon("chevron") }}</summary>
+  <form method="post" action="/settings">
+    <fieldset>
+      <legend>Goals</legend>
+      <label>Weekly cooking goal <input type="number" name="weekly_goal" min="1" max="21" step="1" inputmode="numeric" required value="{{ v['weekly_goal'] }}"></label>
+      <label>Calorie target <input type="number" name="cal_target" min="500" max="10000" step="1" inputmode="numeric" value="{{ v['cal_target'] }}"></label>
+      <label>Protein target (g) <input type="number" name="protein_target" min="0" max="500" step="1" inputmode="numeric" value="{{ v['protein_target'] }}"></label>
+      <label>Goal weight (lbs) <input type="number" name="weight_goal" min="50" max="1000" step="any" inputmode="decimal" value="{{ v['weight_goal'] }}"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Costs</legend>
+      <label>Delivery meal cost ($) <input type="number" name="delivery_cost" min="0" max="500" step="any" inputmode="decimal" required value="{{ v['delivery_cost'] }}"></label>
+      <label>Home meal cost ($) <input type="number" name="home_meal_cost" min="0" max="500" step="any" inputmode="decimal" required value="{{ v['home_meal_cost'] }}"></label>
+    </fieldset>
+    <button type="submit">Save settings</button>
+  </form>
+</details>
 
-<form class="card" method="post" action="/settings">
-  <h2>Settings</h2>
-  <label>Weekly cooking goal <input type="number" name="weekly_goal" min="1" max="21" step="1" inputmode="numeric" required value="{{ user['weekly_goal'] }}"></label>
-  <label>Calorie target <input type="number" name="cal_target" min="500" max="10000" step="1" inputmode="numeric" value="{{ user['cal_target'] if user['cal_target'] is not none }}"></label>
-  <label>Protein target (g) <input type="number" name="protein_target" min="0" max="500" step="1" inputmode="numeric" value="{{ user['protein_target'] if user['protein_target'] is not none }}"></label>
-  <label>Goal weight (lbs) <input type="number" name="weight_goal" min="50" max="1000" step="any" inputmode="decimal" value="{{ user['weight_goal'] if user['weight_goal'] is not none }}"></label>
-  <label>Delivery meal cost ($) <input type="number" name="delivery_cost" min="0" max="500" step="any" inputmode="decimal" required value="{{ user['delivery_cost'] }}"></label>
-  <label>Home meal cost ($) <input type="number" name="home_meal_cost" min="0" max="500" step="any" inputmode="decimal" required value="{{ user['home_meal_cost'] }}"></label>
-  <button type="submit">Save settings</button>
-</form>
-<p><a href="/invite">Invite someone</a></p>
-<form method="post" action="/logout"><button class="danger" type="submit">Sign out</button></form>
+<div class="account">
+  <a class="btn btn-secondary" href="/invite">Invite someone</a>
+  <form method="post" action="/logout"><button class="btn-danger" type="submit">Sign out</button></form>
+</div>
 {% endblock %}

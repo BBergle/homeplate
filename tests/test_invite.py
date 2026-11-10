@@ -1,4 +1,5 @@
 import json
+import re
 
 import httpx
 from fastapi.testclient import TestClient
@@ -60,7 +61,14 @@ def test_new_household_name_rules(login_as, mock_mealie):
     c = as_user(login_as, mock_mealie, admin=True)
     for name in ("", "   ", "x" * 51):
         r = c.post("/invite", data={"where": "new", "household_name": name})
-        assert r.status_code == 200 and 'class="error"' in r.text and "/join/" not in r.text
+        assert r.status_code == 200 and "msg-error" in r.text and "/join/" not in r.text
+
+
+def test_link_in_readonly_field(login_as, mock_mealie):
+    c = as_user(login_as, mock_mealie, admin=True)
+    mock_mealie[INV] = httpx.Response(201, json={"token": "abc123"})
+    t = c.post("/invite", data={"where": "mine"}).text
+    assert re.search(r'<input[^>]*readonly[^>]*value="[^"]*/join/abc123"', t)
 
 
 def test_base_url_used_for_link(login_as, mock_mealie, monkeypatch):

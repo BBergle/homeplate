@@ -19,19 +19,37 @@ FIELDS = {
 }
 
 
-def sparkline(points: list[tuple[date, float]], w: int = 320, h: int = 80) -> str:
-    if len(points) < 2:
+def num(n: float | None) -> str:
+    """180.0 -> "180", 180.5 -> "180.5"; None -> ""."""
+    if n is None:
         return ""
+    n = round(n, 2)
+    return str(int(n)) if n == int(n) else str(n)
+
+
+CRITERIA = {
+    "First cook": "Log your first cook",
+    "10 meals": "Cook 10 meals",
+    "50 meals": "Cook 50 meals",
+    "4-week streak": "Hit your goal 4 weeks running",
+    "5 different recipes": "Cook 5 different recipes",
+}
+
+
+def sparkline(points: list[tuple[date, float]], w: int = 320, h: int = 80, goal: float | None = None) -> dict:
+    """Chart geometry: the line, its area polygon, the last point and the goal line's y (None if the goal is outside the range)."""
+    if len(points) < 2:
+        return {}
     pad = 4
     d0, d1 = points[0][0], points[-1][0]
     lo, hi = min(p[1] for p in points), max(p[1] for p in points)
     span = (d1 - d0).days or 1
-    out = []
-    for d, v in points:
-        x = pad + (d - d0).days / span * (w - 2 * pad)
-        y = h / 2 if hi == lo else pad + (hi - v) / (hi - lo) * (h - 2 * pad)
-        out.append(f"{x:.1f},{y:.1f}")
-    return " ".join(out)
+    y_of = lambda v: h / 2 if hi == lo else pad + (hi - v) / (hi - lo) * (h - 2 * pad)
+    xy = [(pad + (d - d0).days / span * (w - 2 * pad), y_of(v)) for d, v in points]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
+    area = f"{line} {xy[-1][0]:.1f},{h} {xy[0][0]:.1f},{h}"
+    goal_y = y_of(goal) if goal is not None and lo <= goal <= hi else None
+    return {"line": line, "area": area, "last": (round(xy[-1][0], 1), round(xy[-1][1], 1)), "goal_y": goal_y}
 
 
 def _page(request, user, error=None):
@@ -53,20 +71,40 @@ def _page(request, user, error=None):
         ).fetchall()
     finally:
         con.close()
-    totals = stats.week_totals([date.fromisoformat(m["day"]) for m in meals], t)
+    days = [date.fromisoformat(m["day"]) for m in meals]
+    totals = stats.week_totals(days, t)
     points = [(date.fromisoformat(r["date"]), r["lbs"]) for r in ws]
+    goal, streak = user["weekly_goal"], stats.streak(totals, user["weekly_goal"])
+    monday = t - timedelta(days=t.weekday())
+    if streak:
+        streak_text = f"Streak {streak} week{'' if streak == 1 else 's'}"
+    elif any(d < monday for d in days):
+        streak_text = "Fresh start this week"
+    else:
+        streak_text = None
+    longest = stats.longest_run(totals, goal)
+    badges = [
+        {"name": n, "earned": e, "caption": "Earned" if e else CRITERIA.get(n, "")}
+        for n, e in stats.achievements(len(meals), len({m["recipe_id"] for m in meals if m["recipe_id"]}), longest)
+    ]
+    sp = sparkline(points, goal=user["weight_goal"])
     ctx = {
         "user": user,
         "error": error,
-        "this_week": totals[-1],
-        "streak": stats.streak(totals, user["weekly_goal"]),
-        "achievements": stats.achievements(
-            len(meals), len({m["recipe_id"] for m in meals if m["recipe_id"]}), stats.longest_run(totals, user["weekly_goal"])
-        ),
-        "saved": f"{stats.savings(len(meals), user['delivery_cost'], user['home_meal_cost']):,.0f}",
+        "week_count": totals[-1],
+        "week_extra": max(0, totals[-1] - goal),
+        "streak_text": streak_text,
+        "badges": badges,
+        "saved": f"{max(0, stats.savings(len(meals), user['delivery_cost'], user['home_meal_cost'])):,.0f}",
+        "home_meals": len(meals),
         "cooked": cooked,
-        "latest": points[-1][1] if points else None,
-        "line": sparkline(points),
+        "latest": num(round(points[-1][1], 1)) if points else None,
+        "weight_goal": num(user["weight_goal"]),
+        "spark": sp,
+        "spark_label": (
+            f"Weight went from {num(round(points[0][1], 1))} to {num(round(points[-1][1], 1))} lbs, last 90 days" if sp else ""
+        ),
+        "v": {k: num(user[k]) for k in FIELDS},
     }
     return auth.templates.TemplateResponse(request, "me.html", ctx)
 

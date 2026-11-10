@@ -25,7 +25,7 @@ def test_me_empty(client, monkeypatch):
     freeze(monkeypatch)
     r = client.get("/me")
     assert r.status_code == 200
-    assert "0 of 3" in r.text and "Streak: 0 weeks" in r.text
+    assert "0 of 3" in r.text and "Streak" not in r.text and "Fresh start" not in r.text
 
 
 def test_me_counts(client, monkeypatch):
@@ -34,8 +34,8 @@ def test_me_counts(client, monkeypatch):
         entry("cooked")
     entry("other")
     r = client.get("/me")
-    assert "3 of 3" in r.text and "Streak: 1 week" in r.text and "$57" in r.text
-    assert "First cook (earned)" in r.text and "10 meals (locked)" in r.text
+    assert "3 of 3" in r.text and "Streak 1 week" in r.text and "$57" in r.text
+    assert "First cook" in r.text and "10 meals" in r.text
 
 
 def test_settings_validation(client):
@@ -77,12 +77,71 @@ def test_manifest_and_login_head(client):
 
 
 def test_sparkline():
-    assert sparkline([(date(2026, 11, 1), 180)]) == ""
-    pts = sparkline([(date(2026, 11, 1), 180), (date(2026, 11, 8), 178)]).split()
-    assert len(pts) == 2
-    for p in pts:
-        x, y = map(float, p.split(","))
+    assert sparkline([(date(2026, 11, 1), 180)]) == {}
+    two = [(date(2026, 11, 1), 180), (date(2026, 11, 8), 178)]
+    sp = sparkline(two)
+    pts = [tuple(map(float, p.split(","))) for p in sp["line"].split()]
+    assert len(pts) == 2 and sp["last"] == pts[-1] and sp["goal_y"] is None
+    for x, y in pts:
         assert 0 <= x <= 320 and 0 <= y <= 80
+    assert 0 <= sparkline(two, goal=179)["goal_y"] <= 80
+    assert sparkline(two, goal=170)["goal_y"] is None and sparkline(two, goal=190)["goal_y"] is None
+
+
+def test_streak_copy(client, monkeypatch):
+    freeze(monkeypatch)
+    entry("cooked", "2026-11-02")  # only an earlier week: streak 0
+    t = client.get("/me").text
+    assert "Fresh start this week" in t and "0 weeks" not in t and "Streak" not in t
+    for _ in range(3):
+        entry("cooked", "2026-11-03")
+        entry("cooked")
+    t = client.get("/me").text
+    assert "Streak 2 weeks" in t and "Fresh start" not in t
+
+
+def test_fresh_start_needs_earlier_week(client, monkeypatch):
+    freeze(monkeypatch)
+    entry("cooked")  # this week only
+    t = client.get("/me").text
+    assert "Fresh start" not in t and "Streak" not in t
+
+
+def test_savings_never_negative(client, monkeypatch):
+    freeze(monkeypatch)
+    seed("UPDATE users SET delivery_cost = 5, home_meal_cost = 20")
+    entry("cooked")
+    t = client.get("/me").text
+    assert "$0" in t and "$-" not in t and "-$" not in t
+
+
+def test_badges(client, monkeypatch):
+    freeze(monkeypatch)
+    entry("cooked")
+    t = client.get("/me").text
+    assert t.count('class="badge') == 5
+    assert t.count("Earned") == 1 and t.count("icon-lock") == 4 and t.count("icon-check") == 1
+    for c in ("Cook 10 meals", "Cook 50 meals", "Hit your goal 4 weeks running", "Cook 5 different recipes"):
+        assert c in t
+    assert "Log your first cook" not in t
+
+
+def test_numbers_trimmed(client, monkeypatch):
+    freeze(monkeypatch)
+    seed("INSERT INTO weights VALUES ('u1', '2026-11-10', 180.0)")
+    t = client.get("/me").text
+    assert ">180<" in t and "180.0" not in t
+    seed("UPDATE weights SET lbs = 180.5")
+    assert "180.5" in client.get("/me").text
+    seed("UPDATE users SET delivery_cost = 25.0, weight_goal = 170.0")
+    t = client.get("/me").text
+    assert 'value="25"' in t and 'value="25.0"' not in t and 'value="170"' in t
+
+
+def test_settings_open_on_error(client):
+    assert "<details class=\"card more\" open" not in client.get("/me").text
+    r = client.post("/settings", data={"weekly_goal": "0", "delivery_cost": "30"})
+    assert 'role="alert"' in r.text and "<details class=\"card more\" open" in r.text
 
 
 def test_me_with_only_future_entries(client, monkeypatch):
