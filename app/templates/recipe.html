@@ -4,7 +4,7 @@
 {% block content %}
 {% set servings = recipe.get("recipeServings") %}
 <article class="recipe">
-{% if recipe.get("image") %}<img class="hero" src="/r/{{ recipe['id'] }}/image" alt="" width="640" height="480" fetchpriority="high">{% endif %}
+{% if recipe.get("image") %}<img class="recipe-hero" src="/r/{{ recipe['id'] }}/image" alt="" width="640" height="480" fetchpriority="high">{% endif %}
 <h1 class="recipe-title">{{ recipe["name"] }}</h1>
 {% if recipe.get("totalTime") or servings or calories or protein %}
 <p class="chips">

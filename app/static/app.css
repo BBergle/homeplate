@@ -332,8 +332,8 @@ legend { padding: 0; margin: 0 0 var(--s-3); font-size: var(--t-h2); font-weight
 .open-mealie { margin: var(--s-5) 0 0; }
 .open-mealie .btn { width: 100%; }
 
-.hero { display: block; width: calc(100% + 2 * var(--s-4)); max-width: none; aspect-ratio: 4 / 3; margin: calc(-1 * var(--s-4)) calc(-1 * var(--s-4)) var(--s-4); object-fit: cover; }
-@media (min-width: 640px) { .hero { width: 100%; margin: 0 0 var(--s-4); border-radius: var(--r-md); } }
+.recipe-hero { display: block; width: calc(100% + 2 * var(--s-4)); max-width: none; aspect-ratio: 4 / 3; margin: calc(-1 * var(--s-4)) calc(-1 * var(--s-4)) var(--s-4); object-fit: cover; }
+@media (min-width: 640px) { .recipe-hero { width: 100%; margin: 0 0 var(--s-4); border-radius: var(--r-md); } }
 .recipe-title { margin-bottom: var(--s-3); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-4); }
 .chips .chip { font-size: var(--t-small); padding: 0 var(--s-3); line-height: 2; }
