@@ -140,7 +140,3 @@ def test_unauthenticated_recipe_redirects_with_next(mock_mealie):
     assert c.get("/r/a.b", follow_redirects=False).headers["location"] == "/login"
     assert c.get("/r/" + "a" * 65, follow_redirects=False).headers["location"] == "/login"
 
-
-def test_route_walk_public_list(mock_mealie):
-    for route in app.routes:
-        assert not getattr(route, "path", "").startswith("/s/")

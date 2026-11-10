@@ -108,8 +108,7 @@ def test_request_limits(login_as, mock_mealie):
 def test_bad_signature_is_404(login_as, mock_mealie, monkeypatch):
     open_signups(admin(login_as, mock_mealie))
     anon = TestClient(app)
-    loc = submit(FORM | {"email": "FRAN@x.io"}).headers["location"]  # a decoy once a row exists
-    submit()
+    submit()  # a real row; the next submits are decoys
     decoy = submit().headers["location"]
     assert anon.get(decoy).status_code == 200
     assert anon.get(decoy[:-1] + ("A" if decoy[-1] != "A" else "B")).status_code == 404
@@ -298,3 +297,83 @@ def test_admin_dates_in_local_time(login_as, mock_mealie, monkeypatch):
     con.commit()
     t = c.get("/admin").text
     assert "9 Nov" in t and "10 Nov" not in t
+
+
+def test_non_ascii_secret_is_404_with_public_headers(login_as, mock_mealie):
+    open_signups(admin(login_as, mock_mealie))
+    anon = TestClient(app)
+    for secret in ("a" * 64 + "%C3%A9", "%C3%A9" * 65, "a" * 42 + "%C3%A9" + "a" * 22):
+        r = anon.get("/request/" + secret)
+        assert r.status_code == 404, secret
+        assert r.headers["x-robots-tag"] == "noindex" and r.headers["content-security-policy"] == CSP
+        assert r.headers["referrer-policy"] == "same-origin"
+
+
+def test_admin_page_warns_about_unverified_email(login_as, mock_mealie):
+    c = admin(login_as, mock_mealie)
+    open_signups(c)
+    submit()
+    assert "Anyone can type any name and email here. Check with the person before you approve." in c.get("/admin").text
+
+
+def test_late_token_write_does_not_override_reset(login_as, mock_mealie, monkeypatch):
+    from app import invite
+    c = admin(login_as, mock_mealie)
+    open_signups(c)
+    submit()
+
+    def reset_then_invite(*a, **k):
+        con = db.connect()
+        con.execute("UPDATE requests SET status='pending', decided_at=NULL, decided_by=NULL")
+        con.commit()
+        con.close()
+        return "late"
+
+    monkeypatch.setattr(invite, "make_invite", reset_then_invite)
+    assert c.post("/admin/requests/1/approve", data={"where": "mine"}, follow_redirects=False).status_code == 303
+    (row,) = rows()
+    assert row["status"] == "pending" and row["invite_token"] is None
+
+
+def test_huge_request_id_is_404(login_as, mock_mealie):
+    c = admin(login_as, mock_mealie)
+    for act in ("approve", "decline"):
+        r = c.post(f"/admin/requests/{2**63}/{act}", data={"where": "mine"})
+        assert r.status_code == 404, act
+
+
+def test_overlong_name_not_echoed(login_as, mock_mealie):
+    open_signups(admin(login_as, mock_mealie))
+    r = TestClient(app).post("/request", data=FORM | {"name": "N" * 5000})
+    assert r.status_code == 200 and "msg-error" in r.text and "NNNN" not in r.text
+
+
+def test_request_form_same_origin_guard(login_as, mock_mealie):
+    open_signups(admin(login_as, mock_mealie))
+    anon = TestClient(app)
+    ok = anon.post("/request", data=FORM, headers={"Origin": "http://testserver"}, follow_redirects=False)
+    assert ok.status_code == 303 and len(rows()) == 1
+    for origin in ("https://evil.example", "null"):
+        r = anon.post("/request", data=FORM | {"email": "z@x.io"}, headers={"Origin": origin}, follow_redirects=False)
+        assert r.status_code == 403, origin
+    assert len(rows()) == 1
+
+
+def test_admin_flag_revoked_mid_session(login_as, mock_mealie):
+    c = admin(login_as, mock_mealie)
+    open_signups(c)
+    submit()
+    mock_mealie[SELF] = httpx.Response(200, json={"id": "u1", "fullName": "u1", "admin": False, "groupId": "g-1"})
+    calls = [c.get("/admin"), c.post("/admin/signups", data={"open": "0"}),
+             c.post("/admin/requests/1/approve", data={"where": "mine"}), c.post("/admin/requests/1/decline")]
+    assert [r.status_code for r in calls] == [403] * 4
+    assert rows()[0]["status"] == "pending"
+
+
+def test_public_headers_on_303_and_request_404(login_as, mock_mealie):
+    open_signups(admin(login_as, mock_mealie))
+    anon = TestClient(app)
+    for r in (submit(), anon.get("/request/nope")):
+        assert r.status_code in (303, 404)
+        assert r.headers["x-robots-tag"] == "noindex" and r.headers["referrer-policy"] == "same-origin"
+        assert r.headers["content-security-policy"] == CSP

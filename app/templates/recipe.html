@@ -41,7 +41,7 @@
         <details class="more">
           <summary aria-label="Photo options">{{ icon("more") }}</summary>
           <form method="post" action="/photos/{{ p['id'] }}/private">
-            <button class="btn btn-secondary">{{ "Make public" if p["private"] else "Make private" }}</button>
+            <button class="btn btn-secondary">{{ "Show to others" if p["private"] else "Hide from others" }}</button>
           </form>
         </details>
       </div>

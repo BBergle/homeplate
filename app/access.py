@@ -33,7 +33,9 @@ def new_secret() -> str:
 
 
 def _decoy_ok(secret: str) -> bool:
-    return len(secret) == 65 and hmac.compare_digest(secret[43:], _sig(secret[:43]))
+    if len(secret) != 65 or not secret.isascii():
+        return False  # compare_digest raises TypeError on non-ASCII str
+    return hmac.compare_digest(secret[43:].encode(), _sig(secret[:43]).encode())
 
 
 def local_date(iso: str | None) -> str:
@@ -77,7 +79,7 @@ def request_submit(request: Request, name: str = Form(""), email: str = Form("")
         else None
     )
     if error:
-        return _form(request, error, name=name, email=email if len(email) <= 254 else "", note=note if len(note) <= 200 else "")
+        return _form(request, error, name=name if len(name) <= 100 else "", email=email if len(email) <= 254 else "", note=note if len(note) <= 200 else "")
     if not signups_open():
         raise HTTPException(404)
     secret = new_secret()
@@ -167,7 +169,7 @@ def _decide(con, rid: int, user, status: str):
 
 
 def _exists(con, rid: int) -> None:
-    if not con.execute("SELECT 1 FROM requests WHERE id = ?", (rid,)).fetchone():
+    if rid > 2**63 - 1 or not con.execute("SELECT 1 FROM requests WHERE id = ?", (rid,)).fetchone():
         raise HTTPException(404)
 
 
@@ -184,7 +186,8 @@ def approve(request: Request, rid: int, where: str = Form("mine"), household_nam
         if claimed:
             try:
                 token = invite.make_invite(user["mealie_token"], where, household_name)
-                con.execute("UPDATE requests SET invite_token = ? WHERE id = ?", (token, rid))
+                # if the orphan reset fired meanwhile the row is pending again: leave it, the next approve makes a fresh invite
+                con.execute("UPDATE requests SET invite_token = ? WHERE id = ? AND status = 'approved'", (token, rid))
             except BaseException:
                 con.execute("UPDATE requests SET status = 'pending', decided_at = NULL, decided_by = NULL WHERE id = ?", (rid,))
                 raise
