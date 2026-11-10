@@ -1,6 +1,8 @@
 # homeplate
 
-A small self-hosted FastAPI companion app to the [Mealie](https://mealie.io) recipe manager.
+A small self-hosted chat assistant for the [Mealie](https://mealie.io) recipe manager. Sign in with your Mealie account, then ask for recipe ideas. The assistant finds recipes on the web and you add them to Mealie with a tap. You can also ask about the recipes you have already saved.
+
+The assistant runs on your own OpenRouter key. Add it on the Settings page. Everything else, such as browsing and cooking recipes, you do in Mealie.
 
 ## Run locally
 
@@ -13,25 +15,17 @@ homeplate is on http://localhost:8000 (`/healthz`), Mealie on http://localhost:9
 | Variable | Meaning |
 | --- | --- |
 | `MEALIE_URL` | Where homeplate reaches Mealie (default `http://mealie:9000`). |
-| `MEALIE_PUBLIC_URL` | Mealie address your browser can open, used for links. |
+| `MEALIE_PUBLIC_URL` | Mealie address your browser can open. The "Open in Mealie" links on added recipes use it. Without it those links are left out. |
 | `SECRET_KEY` | Signs the private status links for account requests. Set a long random value and keep it the same. If it is not set, the app falls back to a built-in placeholder. That only lets someone make a fake "request sent" page appear and exposes nothing, but you should still set it. It also encrypts saved AI keys: the app will not save an AI key while it is unset or a placeholder (`dev`, `change-me`), and changing it means everyone re-enters their key. |
-| `BASE_URL` | homeplate's real public address, such as `https://plate.example.com`. An `https` address turns on the cookie `Secure` flag. It is the address used in recipe and join links. Form posts are accepted only from this address or the address the request arrived on. |
-| `TZ` | Time zone that decides what "today" is (default `UTC`). |
-| `DATA_DIR` | Where the database and photos live (default `/data`). |
-
-## Sharing
-
-Nothing in homeplate is public: only people with an account can see any recipe, photo or user detail. The recipe page (`/r/<id>`) shows the full recipe and everyone's non-private photos. Its "Link to this recipe" card is an ordinary link; without an account it leads to the sign-in screen and, after signing in, back to that recipe.
-
-## Workouts
-
-Workouts are typed in. If you give a calorie number from your own device, it is used as given. Otherwise the app estimates it from the activity, effort, minutes and your latest logged weight. The day's calories are shown net of what was burned, and a setting in Me controls what share of workout calories counts.
+| `BASE_URL` | homeplate's real public address, such as `https://plate.example.com`. An `https` address turns on the cookie `Secure` flag. It is the address used in join links. Form posts are accepted only from this address or the address the request arrived on. |
+| `TZ` | Time zone that decides the date the assistant is told (default `UTC`). |
+| `DATA_DIR` | Where the database and the recipe card photos live (default `/data`). |
 
 ## Accounts
 
-Nothing is public: new people need an account. Admins, and users Mealie lets invite (the "can invite" permission), can create an invite link at `/invite`, for their own household or, for admins, a new one. The link opens a public form at `/join/<token>`; it is single-use and creates a Mealie account, then signs the new user in.
+Nothing in homeplate is public: new people need an account. Admins, and users Mealie lets invite (the "can invite" permission), can create an invite link at `/invite`, for their own household or, for admins, a new one. The link opens a public form at `/join/<token>`; it is single-use and creates a Mealie account, then signs the new user in.
 
-An admin can also switch on account requests (Me, then Admin; off by default). While it is on, the sign-in screen shows "Create account", which asks for a name, email and optional note, never a password. The requester gets a private status page; an admin approves (choosing the household) or declines each request on `/admin`. Approval creates a single-use invite and the status page then leads into the join form. Mealie's own open sign-up can stay off.
+An admin can also switch on account requests (Settings, then Admin; off by default). While it is on, the sign-in screen shows "Create account", which asks for a name, email and optional note, never a password. The requester gets a private status page; an admin approves (choosing the household) or declines each request on `/admin`. Approval creates a single-use invite and the status page then leads into the join form. Mealie's own open sign-up can stay off.
 
 Anyone can type any name and email into the request form, and homeplate does not check them. Before you approve, check with the person that the request is really theirs. Otherwise a stranger could get an account in someone else's name.
 
