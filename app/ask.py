@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
@@ -100,12 +101,16 @@ def ask_send(request: Request, tasks: BackgroundTasks, message: str = Form(""), 
             cur = con.execute("INSERT INTO chat_messages (user_id, role, created_at) VALUES (?, 'assistant', ?)", (uid, now))
             con.commit()
             row_id = cur.lastrowid
+        except sqlite3.IntegrityError:  # a concurrent request already has an answer pending (unique index): ignore this message
+            con.rollback()
+            row_id = None
         finally:
             con.close()
-        sent = [{"role": m["role"], "content": m["content"]} for m in history if m["content"] is not None and not m["error"]]
-        sent = (sent + [{"role": "user", "content": message}])[-HISTORY:]
-        system = {"role": "system", "content": SYSTEM.format(date=today.local_today().strftime("%A, %B %-d, %Y"))}
-        tasks.add_task(_answer, row_id, key, user["ai_model"] or ai.DEFAULT_MODEL, [system, *sent])
+        if row_id is not None:
+            sent = [{"role": m["role"], "content": m["content"]} for m in history if m["content"] is not None and not m["error"]]
+            sent = (sent + [{"role": "user", "content": message}])[-HISTORY:]
+            system = {"role": "system", "content": SYSTEM.format(date=today.local_today().strftime("%A, %B %-d, %Y"))}
+            tasks.add_task(_answer, row_id, key, user["ai_model"] or ai.DEFAULT_MODEL, [system, *sent])
     if request.headers.get("HX-Request"):
         return _fragment(request, uid)
     return RedirectResponse("/ask", 303)

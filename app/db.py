@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     error INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS one_waiting_answer ON chat_messages (user_id) WHERE role = 'assistant' AND content IS NULL;
 """
 
 

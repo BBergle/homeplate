@@ -229,3 +229,12 @@ def test_new_chat(ai_client, login_as, mock_ai):
     r = ai_client.post("/ask/new", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/ask"
     assert [(r["user_id"], r["content"]) for r in rows()] == [("u2", "theirs")]
+
+
+def test_concurrent_second_message_is_ignored(ai_client, mock_ai, monkeypatch):
+    # the race: the second request read "not waiting" before the first one's rows landed
+    add_row("user", "Q1")
+    add_row("assistant", None)
+    monkeypatch.setattr(ask, "_conversation", lambda uid: [])
+    ai_client.post("/ask", data={"message": "Q2"}, headers=HX)
+    assert [r["content"] for r in rows()] == ["Q1", None]
