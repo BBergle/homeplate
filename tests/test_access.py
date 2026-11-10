@@ -338,8 +338,9 @@ def test_late_token_write_does_not_override_reset(login_as, mock_mealie, monkeyp
 def test_huge_request_id_is_404(login_as, mock_mealie):
     c = admin(login_as, mock_mealie)
     for act in ("approve", "decline"):
-        r = c.post(f"/admin/requests/{2**63}/{act}", data={"where": "mine"})
-        assert r.status_code == 404, act
+        for rid in (2**63, -99999999999999999999):
+            r = c.post(f"/admin/requests/{rid}/{act}", data={"where": "mine"})
+            assert r.status_code == 404, (act, rid)
 
 
 def test_overlong_name_not_echoed(login_as, mock_mealie):
