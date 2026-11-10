@@ -14,7 +14,7 @@ homeplate is on http://localhost:8000 (`/healthz`), Mealie on http://localhost:9
 | --- | --- |
 | `MEALIE_URL` | Where homeplate reaches Mealie (default `http://mealie:9000`). |
 | `MEALIE_PUBLIC_URL` | Mealie address your browser can open, used for links. |
-| `SECRET_KEY` | Signs the private status links for account requests. Set a long random value and keep it the same. If it is not set, the app falls back to a built-in placeholder. That only lets someone make a fake "request sent" page appear and exposes nothing, but you should still set it. |
+| `SECRET_KEY` | Signs the private status links for account requests. Set a long random value and keep it the same. If it is not set, the app falls back to a built-in placeholder. That only lets someone make a fake "request sent" page appear and exposes nothing, but you should still set it. It also encrypts saved AI keys: the app will not save an AI key while it is unset or a placeholder (`dev`, `change-me`), and changing it means everyone re-enters their key. |
 | `BASE_URL` | homeplate's real public address, such as `https://plate.example.com`. An `https` address turns on the cookie `Secure` flag. It is the address used in recipe and join links. Form posts are accepted only from this address or the address the request arrived on. |
 | `TZ` | Time zone that decides what "today" is (default `UTC`). |
 | `DATA_DIR` | Where the database and photos live (default `/data`). |

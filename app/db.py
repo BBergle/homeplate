@@ -78,6 +78,16 @@ CREATE TABLE IF NOT EXISTS workouts (
     note TEXT,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
+    role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+    content TEXT,      -- NULL on an assistant row: the answer is still being fetched
+    sources TEXT,      -- JSON list of {"url","title"}
+    error INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS one_waiting_answer ON chat_messages (user_id) WHERE role = 'assistant' AND content IS NULL;
 """
 
 
@@ -95,4 +105,5 @@ def connect() -> sqlite3.Connection:
     con.executescript(SCHEMA)
     add_column_if_missing(con, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing(con, "users", "workout_pct", "INTEGER NOT NULL DEFAULT 100")
+    add_column_if_missing(con, "users", "ai_model", "TEXT")
     return con

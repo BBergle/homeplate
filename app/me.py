@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
-from app import auth, db, stats, today
+from app import ai, auth, db, stats, today
 
 router = APIRouter()
 
@@ -53,7 +53,7 @@ def sparkline(points: list[tuple[date, float]], w: int = 320, h: int = 80, goal:
     return {"line": line, "area": area, "last": (round(xy[-1][0], 1), round(xy[-1][1], 1)), "goal_y": goal_y}
 
 
-def _page(request, user, error=None):
+def _page(request, user, error=None, ai_msg=None):
     uid = user["mealie_user_id"]
     t = today.local_today()
     con = db.connect()
@@ -96,6 +96,8 @@ def _page(request, user, error=None):
         "user": user,
         "pending": pending,
         "error": error,
+        "ai_msg": ai_msg,
+        "has_ai_key": ai.decrypt(user["ai_key_enc"]) is not None,
         "week_count": totals[-1],
         "week_extra": max(0, totals[-1] - goal),
         "streak_text": streak_text,
@@ -154,6 +156,3 @@ def order(request: Request, user=Depends(auth.current_user)):
     return auth.templates.TemplateResponse(request, "soon.html", {"blurb": "Order groceries from your shopping list."})
 
 
-@router.get("/ask")
-def ask(request: Request, user=Depends(auth.current_user)):
-    return auth.templates.TemplateResponse(request, "soon.html", {"blurb": "Ask food and nutrition questions."})

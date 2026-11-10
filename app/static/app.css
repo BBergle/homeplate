@@ -270,6 +270,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: var(--r-
 .card.more > summary { padding: var(--s-4); }
 .card.more > summary h2 { margin: 0; }
 .card.more > form { padding: 0 var(--s-4) var(--s-4); }
+.ai-settings .btn-danger { margin-top: var(--s-3); }
 
 .add-workout fieldset { margin: 0 0 var(--s-4); }
 .add-workout legend { margin: 0; font-size: var(--t-small); font-weight: 600; line-height: 1.35; }
@@ -378,3 +379,17 @@ legend { padding: 0; margin: 0 0 var(--s-3); font-size: var(--t-h2); font-weight
 .req .field { margin: 0; }
 .login > .btn { display: flex; margin-top: var(--s-3); }
 .login > .empty { margin-top: var(--s-5); }
+
+/* ---------- Ask ---------- */
+.chat { list-style: none; margin: 0 0 var(--s-4); padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.chat-user, .chat-ai { max-width: 85%; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); }
+.chat-user { align-self: flex-end; background: var(--accent); color: var(--on-accent); }
+.chat-ai { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); }
+.chat-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-error { border-color: var(--danger); color: var(--danger); }
+.chat-wait { color: var(--muted); }
+.chat-sources { list-style: none; margin: var(--s-2) 0 0; padding: 0; font-size: var(--t-small); }
+.chat-sources li { margin: 0 0 var(--s-1); overflow-wrap: anywhere; }
+.chat-empty { margin: 0 0 var(--s-4); }
+.chat-form { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-4); }
+.chat-form .btn { align-self: flex-end; }

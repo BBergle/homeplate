@@ -1,0 +1,22 @@
+<ol class="chat" aria-live="polite">
+{% for m in msgs %}
+  {% if m.role == "user" %}
+  <li class="chat-user"><p class="chat-text">{{ m.content }}</p></li>
+  {% elif m.content is none %}
+  <li class="chat-ai chat-wait" role="status" hx-get="/ask/chat" hx-trigger="every 3s" hx-target="#chat" hx-swap="innerHTML">Thinking. This can take a little while.</li>
+  {% else %}
+  <li class="chat-ai{{ ' chat-error' if m.error }}">
+    <p class="chat-text">{{ m.content }}</p>
+    {% if m.sources %}<ul class="chat-sources">{% for s in m.sources %}<li><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.title }}</a></li>{% endfor %}</ul>{% endif %}
+  </li>
+  {% endif %}
+{% endfor %}
+</ol>
+{% if not msgs %}<p class="muted chat-empty">Ask about recipes, cooking or nutrition.</p>{% endif %}
+<form class="chat-form" method="post" action="/ask" hx-post="/ask" hx-target="#chat" hx-swap="innerHTML">
+  <textarea name="message" rows="2" maxlength="4000" required aria-label="Your question"{% if waiting %} disabled{% endif %}></textarea>
+  <button class="btn" type="submit"{% if waiting %} disabled{% endif %}>Send</button>
+</form>
+{% if msgs %}
+<form method="post" action="/ask/new"><button class="btn btn-secondary" type="submit">New chat</button></form>
+{% endif %}

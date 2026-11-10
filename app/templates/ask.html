@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block content %}
+<header class="page-head"><h1>Ask</h1></header>
+{% if has_key %}
+<div id="chat">{% include "_chat.html" %}</div>
+{% else %}
+<section class="card empty">
+  {{ icon("ask") }}
+  <h2>Add your AI key</h2>
+  <p class="muted">The assistant runs on your own OpenRouter key.</p>
+  <a class="btn" href="/me?ai=1#ai">Open Settings</a>
+</section>
+{% endif %}
+{% endblock %}

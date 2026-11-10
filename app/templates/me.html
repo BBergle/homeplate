@@ -80,6 +80,19 @@
   </form>
 </details>
 
+<details class="card more" id="ai"{% if ai_msg or request.query_params.get("ai") %} open{% endif %}>
+  <summary><h2>AI assistant</h2>{{ icon("chevron") }}</summary>
+  <form method="post" action="/settings/ai" class="ai-settings">
+    {% if ai_msg %}<p class="msg" role="alert">{{ ai_msg }}</p>{% endif %}
+    <p class="muted">Bring your own OpenRouter key to use the Ask tab. What you type there is sent to OpenRouter under your key. Your weight is never sent.</p>
+    <label>OpenRouter key <input type="password" name="key" autocomplete="off" maxlength="300"></label>
+    {% if has_ai_key %}<p class="muted">A key is saved. Type a new one to replace it.</p>{% endif %}
+    <label>Model <input type="text" name="model" value="{{ user['ai_model'] or '' }}" placeholder="openai/gpt-5-nano" maxlength="100"></label>
+    <button type="submit">Save AI settings</button>
+    {% if has_ai_key %}<button class="btn-danger" type="submit" name="remove" value="1">Remove key</button>{% endif %}
+  </form>
+</details>
+
 <div class="account">
   {% if user["is_admin"] %}<a class="btn btn-secondary" href="/admin">Admin{% if pending %} · {{ pending }} request{{ "" if pending == 1 else "s" }}{% endif %}</a>{% endif %}
   <a class="btn btn-secondary" href="/invite">Invite someone</a>

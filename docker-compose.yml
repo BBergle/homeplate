@@ -8,7 +8,7 @@ services:
     environment:
       MEALIE_URL: http://mealie:9000
       MEALIE_PUBLIC_URL: http://localhost:9925
-      SECRET_KEY: change-me
+      SECRET_KEY: ${SECRET_KEY:-change-me}
       BASE_URL: http://localhost:8000
       TZ: America/Indiana/Indianapolis
       DATA_DIR: /data
