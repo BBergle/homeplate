@@ -1,14 +1,18 @@
 {% extends "public.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Join Homeplate{% endblock %}
 {% block content %}
-<h1>Join Homeplate</h1>
-<form method="post" action="/join/{{ token }}" class="card">
-  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-  <label>Name <input name="name" autocomplete="name" required value="{{ v.get('name', '') }}"></label>
-  <label>Email <input name="email" type="email" autocomplete="email" required value="{{ v.get('email', '') }}"></label>
-  <label>Username <input name="username" autocomplete="username" required value="{{ v.get('username', '') }}"></label>
-  <label>Password <input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
-  <label>Confirm password <input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required></label>
-  <button>Create account</button>
-</form>
+<div class="login">
+  <h1 class="wordmark">{{ icon("plate") }}homeplate</h1>
+  <h2 class="tagline">Create your account</h2>
+  <form method="post" action="/join/{{ token }}" class="card">
+    {% if error %}<p class="msg msg-error" role="alert">{{ error }}</p>{% endif %}
+    <label class="field">Name <input name="name" autocomplete="name" enterkeyhint="next" required value="{{ v.get('name', '') }}"></label>
+    <label class="field">Email <input name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" enterkeyhint="next" required value="{{ v.get('email', '') }}"></label>
+    <label class="field">Username <input name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required value="{{ v.get('username', '') }}"></label>
+    <label class="field">Password <input name="password" type="password" autocomplete="new-password" minlength="8" enterkeyhint="next" required></label>
+    <label class="field">Confirm password <input name="password_confirm" type="password" autocomplete="new-password" minlength="8" enterkeyhint="go" required></label>
+    <button class="btn btn-primary">Join</button>
+  </form>
+</div>
 {% endblock %}

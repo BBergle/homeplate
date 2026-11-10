@@ -169,11 +169,11 @@ input[type=checkbox], input[type=radio] { flex: none; width: 24px; height: 24px;
 }
 
 .photo-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--s-1);
-  margin: 0; padding: 0; list-style: none; border-radius: var(--r-md); overflow: hidden;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--s-2);
+  margin: 0; padding: 0; list-style: none;
 }
 .photo-grid a { display: block; }
-.photo-grid img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.photo-grid img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--r-sm); }
 
 /* Tab bar: one fixed bar; the active tab has colour, a top bar and aria-current. */
 .tabs {
@@ -321,15 +321,43 @@ legend { padding: 0; margin: 0 0 var(--s-3); font-size: var(--t-h2); font-weight
 .invite-link { margin: 0; font-size: var(--t-small); overflow-wrap: anywhere; }
 .msg > span { min-width: 0; }
 
-/* ---------- Legacy ----------
-   Classes the gallery, share and join pages still use until their tasks restyle them.
-   Also aliased above: .error (= .msg .msg-error), button.danger (= .btn-danger). */
-.gallery form > button { width: auto; }
-ul.gallery { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
-.gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--r-sm); display: block; }
-.gallery form { margin: var(--s-1) 0 0; display: flex; align-items: center; gap: var(--s-2); }
-.public .hero { width: 100%; max-height: 320px; object-fit: cover; border-radius: var(--r-md); }
-.ingredients { list-style: none; padding: 0; }
-.ingredients li { padding: var(--s-1) 0; border-bottom: 1px solid var(--line); }
-.ingredients .sub { font-weight: 600; border: 0; padding-top: var(--s-3); }
-.steps li { margin: 0 0 var(--s-3); white-space: pre-line; }
+/* ---------- Gallery ---------- */
+.share h2 { margin-bottom: var(--s-3); }
+.share-link { margin: 0 0 var(--s-4); font-size: var(--t-small); overflow-wrap: anywhere; }
+.shot { position: relative; }
+.shot-bar { position: absolute; inset: var(--s-1) var(--s-1) auto; display: flex; align-items: flex-start; justify-content: space-between; pointer-events: none; }
+.shot-bar > * { pointer-events: auto; }
+.shot-bar .chip { padding: 0 var(--s-2); background: var(--surface); box-shadow: var(--shadow-1); }
+.shot-bar .more { position: relative; margin-left: auto; }
+.shot-bar .more > summary { justify-content: center; width: 44px; min-height: 44px; border-radius: var(--r-pill); background: var(--surface); color: var(--text); box-shadow: var(--shadow-1); }
+.shot-bar .more > form { position: absolute; top: 100%; right: 0; z-index: 1; margin: var(--s-1) 0 0; }
+.shot-bar .more > form > button { width: auto; white-space: nowrap; background: var(--surface); }
+.open-mealie { margin: var(--s-5) 0 0; }
+
+/* ---------- Share ---------- */
+.public .hero { display: block; width: calc(100% + 2 * var(--s-4)); max-width: none; aspect-ratio: 4 / 3; margin: calc(-1 * var(--s-4)) calc(-1 * var(--s-4)) var(--s-4); object-fit: cover; }
+@media (min-width: 640px) { .public .hero { width: 100%; margin: 0 0 var(--s-4); border-radius: var(--r-md); } }
+.share-title { margin-bottom: var(--s-3); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-4); }
+.chips .chip { font-size: var(--t-small); padding: 0 var(--s-3); line-height: 2; }
+.share-desc { max-width: 65ch; margin: 0 0 var(--s-5); font-size: var(--t-recipe); line-height: 1.6; }
+.public section { margin: 0 0 var(--s-5); }
+.public .photo-grid li { min-width: 0; }
+.ingredients { list-style: none; margin: 0; padding: 0; font-size: var(--t-recipe); line-height: 1.45; }
+.ingredients li { padding: var(--s-2) 0; border-top: 1px solid var(--line); }
+.ingredients li:first-child { border-top: 0; padding-top: 0; }
+.ingredients li:last-child { padding-bottom: 0; }
+.ingredients .sub { padding-top: var(--s-4); border-top: 0; font-size: var(--t-body); font-weight: 650; }
+.ingredients .sub:first-child { padding-top: 0; }
+.steps { list-style: none; counter-reset: step; margin: 0; padding: 0; }
+.steps li { display: grid; grid-template-columns: 32px 1fr; column-gap: var(--s-3); margin: 0 0 var(--s-4); max-width: 65ch; font-size: var(--t-recipe); line-height: 1.6; counter-increment: step; }
+.steps li::before {
+  content: counter(step); grid-row: 1 / span 2; width: 32px; height: 32px; margin-top: 2px;
+  display: grid; place-items: center; border-radius: var(--r-pill);
+  background: var(--accent); color: var(--on-accent); font: 700 var(--t-small)/1 var(--font-num);
+}
+.steps strong { grid-column: 2; font-weight: 650; }
+.steps .step-text { grid-column: 2; white-space: pre-line; min-width: 0; }
+
+/* ---------- Join ---------- */
+.login .tagline { font-size: var(--t-h2); font-weight: 650; }

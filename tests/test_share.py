@@ -123,10 +123,10 @@ def test_share_is_reused(login_as, mock_mealie):
 
 def test_serves_prints_whole_numbers(login_as, mock_mealie):
     shared(login_as, mock_mealie)
-    for servings, want, not_want in ((4.0, "Serves 4 ", "4.0"), (2.5, "Serves 2.5 ", None), (4, "Serves 4 ", "4.0")):
+    for servings, want, not_want in ((4.0, ">Serves 4<", "4.0"), (2.5, ">Serves 2.5<", None), (4, ">Serves 4<", "4.0")):
         mock_mealie[("GET", f"/api/recipes/shared/{TOKEN}")] = httpx.Response(200, json=RECIPE | {"recipeServings": servings})
         t = TestClient(app).get(f"/s/{TOKEN}").text
-        assert want in " ".join(t.split()) + " " and (not_want is None or not_want not in t)
+        assert want in t and (not_want is None or not_want not in t)
 
 
 def test_huge_photo_id_is_404(login_as, mock_mealie):
@@ -180,3 +180,37 @@ def test_expired_share_token_rejected_by_mealie_is_public_404(login_as, mock_mea
     shared(login_as, mock_mealie)
     mock_mealie[("GET", f"/api/recipes/shared/{TOKEN}")] = httpx.Response(400, json={})
     assert TestClient(app).get(f"/s/{TOKEN}").status_code == 404
+
+
+def test_share_og_tags(login_as, mock_mealie):
+    shared(login_as, mock_mealie)
+    t = TestClient(app).get(f"/s/{TOKEN}").text
+    assert '<meta property="og:title" content="Chili">' in t
+    assert '<meta property="og:description" content="Warm">' in t
+    assert f'<meta property="og:image" content="http://testserver/s/{TOKEN}/image">' in t
+    long = '"><b>' + "x" * 300
+    mock_mealie[("GET", f"/api/recipes/shared/{TOKEN}")] = httpx.Response(200, json=RECIPE | {"image": None, "description": long})
+    t = TestClient(app).get(f"/s/{TOKEN}").text
+    assert "og:image" not in t and 'og:title" content="Chili"' in t
+    assert 'content="&#34;&gt;&lt;b&gt;' + "x" * 195 + '">' in t.split("</head>")[0] and "x" * 196 not in t.split("</head>")[0]
+    mock_mealie[("GET", f"/api/recipes/shared/{TOKEN}")] = httpx.Response(200, json=RECIPE | {"description": ""})
+    assert "og:description" not in TestClient(app).get(f"/s/{TOKEN}").text
+
+
+def test_share_order(login_as, mock_mealie):
+    shared(login_as, mock_mealie)
+    t = TestClient(app).get(f"/s/{TOKEN}").text
+    marks = ['fetchpriority="high"', "<h1", 'class="chip"', ">Warm<", ">Ingredients<", ">Method<", ">Photos<", "<footer"]
+    pos = [t.index(m) for m in marks]
+    assert pos == sorted(pos)
+    assert 'alt=""' in t[t.index("fetchpriority") - 200 : t.index("fetchpriority") + 100]
+    mock_mealie[("GET", f"/api/recipes/shared/{TOKEN}")] = httpx.Response(200, json=RECIPE | {"image": None})
+    t = TestClient(app).get(f"/s/{TOKEN}").text
+    assert "fetchpriority" not in t and 'class="hero' not in t
+
+
+def test_share_no_app_chrome(login_as, mock_mealie):
+    shared(login_as, mock_mealie)
+    t = TestClient(app).get(f"/s/{TOKEN}").text
+    for bad in ('class="tabs"', "htmx", "manifest", "<script", ' style="', "<style"):
+        assert bad not in t, bad
