@@ -50,6 +50,18 @@ CREATE TABLE IF NOT EXISTS weights (
     lbs REAL NOT NULL,
     PRIMARY KEY (user_id, date)
 );
+CREATE TABLE IF NOT EXISTS workouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(mealie_user_id),
+    day TEXT NOT NULL,
+    activity TEXT NOT NULL,
+    minutes INTEGER NOT NULL,
+    intensity TEXT NOT NULL,
+    calories INTEGER NOT NULL,
+    source TEXT NOT NULL CHECK (source IN ('entered','estimated')),
+    note TEXT,
+    created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS shares (
     token TEXT PRIMARY KEY,
     recipe_id TEXT NOT NULL UNIQUE,

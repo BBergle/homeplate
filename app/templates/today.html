@@ -72,10 +72,10 @@
   </form>
 </section>
 
-{% if entries %}
+{% if entries or workouts %}
 <section class="card">
   <h2>Logged today</h2>
-  <ul class="list entries" role="list">{% for e in entries %}{% include "_entry.html" %}{% endfor %}</ul>
+  <ul class="list entries" role="list">{% for e in entries %}{% include "_entry.html" %}{% endfor %}{% for w in workouts %}{% include "_workout.html" %}{% endfor %}</ul>
 </section>
 {% else %}
 <section class="card empty">
@@ -95,6 +95,29 @@
       <label class="field">Protein (g) <input type="number" name="protein_g" min="0" step="any" inputmode="decimal" enterkeyhint="done" autocomplete="off"></label>
     </div>
     <button type="submit">Add</button>
+  </form>
+</details>
+
+<details class="card more add-workout"{% if open_form == "workout" %} open{% endif %}>
+  <summary><h2>Add workout</h2> {{ icon("chevron") }}</summary>
+  <form method="post" action="/workouts">
+    <label class="field">Activity
+      <select name="activity">
+        {%- for a in ("cycling", "running", "walking", "strength", "swimming", "other") %}<option value="{{ a }}">{{ a|capitalize }}</option>{% endfor -%}
+      </select></label>
+    <label class="field">Minutes <input type="number" name="minutes" min="1" max="1440" step="1" inputmode="numeric" enterkeyhint="next" autocomplete="off" required></label>
+    <fieldset>
+      <legend>Effort</legend>
+      <div class="radios">
+        {%- for i in ("easy", "moderate", "hard") %}
+        <label><input type="radio" name="intensity" value="{{ i }}"{% if i == "moderate" %} checked{% endif %}> {{ i|capitalize }}</label>
+        {%- endfor %}
+      </div>
+    </fieldset>
+    <button type="button" class="btn-secondary est" hx-post="/workouts/estimate" hx-include="closest form" hx-target="#workout-calories" hx-swap="outerHTML">Estimate</button>
+    {% with value="", error=None, hint=None %}{% include "_workout_calories.html" %}{% endwith %}
+    <label class="field">Note <input type="text" name="note" maxlength="200" enterkeyhint="done"></label>
+    <button type="submit">Log workout</button>
   </form>
 </details>
 

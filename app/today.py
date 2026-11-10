@@ -29,7 +29,7 @@ def _time_label(created_at: str) -> str:
 
 
 def _page(request, user, error=None, open_form=None):
-    """open_form: "cooked" or "other", the form whose optional fields start open (the one that errored)."""
+    """open_form: "cooked", "other" or "workout", the form whose optional fields start open (the one that errored)."""
     uid, d = user["mealie_user_id"], local_today()
     con = db.connect()
     try:
@@ -39,6 +39,10 @@ def _page(request, user, error=None, open_form=None):
             (uid, d.isoformat()),
         ).fetchall()
         w = con.execute("SELECT lbs FROM weights WHERE user_id = ? AND date = ?", (uid, d.isoformat())).fetchone()
+        workouts = con.execute(
+            "SELECT * FROM workouts WHERE user_id = ? AND day = ? ORDER BY id", (uid, d.isoformat())
+        ).fetchall()
+        has_weight = con.execute("SELECT 1 FROM weights WHERE user_id = ?", (uid,)).fetchone() is not None
         meal_days = con.execute(
             "SELECT day FROM entries WHERE user_id = ? AND kind IN ('cooked', 'leftovers')", (uid,)
         ).fetchall()
@@ -49,6 +53,9 @@ def _page(request, user, error=None, open_form=None):
     week = stats.week_totals([date.fromisoformat(r["day"]) for r in meal_days], d)[-1]
     ctx = {
         "entries": [dict(e, time_label=_time_label(e["created_at"])) for e in entries],
+        "workouts": workouts,
+        "burned": sum(w["calories"] for w in workouts),
+        "has_weight": has_weight,
         "cal": cal,
         "protein": round(sum(e["protein_g"] or 0 for e in entries)),
         "cal_pct": min(100, max(0, round(cal * 100 / target))) if target else None,
@@ -65,15 +72,15 @@ def _page(request, user, error=None, open_form=None):
     return auth.templates.TemplateResponse(request, "today.html", ctx)
 
 
-def _num(s: str, name: str) -> int | None:
+def _num(s: str, name: str, lo: int = 0, hi: int = 100000) -> int | None:
     if not s.strip():
         return None
     try:
         n = float(s)
     except ValueError:
-        n = -1
-    if not math.isfinite(n) or n < 0 or n > 100000:
-        raise ValueError(f"{name} must be a number from 0 to 100000")
+        n = lo - 1
+    if not math.isfinite(n) or n < lo or n > hi:
+        raise ValueError(f"{name} must be a number from {lo} to {hi}")
     return round(n)
 
 
